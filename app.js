@@ -126,3 +126,26 @@ document.addEventListener('keydown', e => {
     document.getElementById('guide-modal').classList.remove('open');
   }
 });
+
+/* ========================================
+   VISUAL VIEWPORT — 键盘适配
+======================================== */
+
+if (window.visualViewport) {
+  let basePadding = null;
+
+  window.visualViewport.addEventListener('resize', () => {
+    const sheet = document.querySelector('#add-modal .modal-sheet');
+    const modal = document.getElementById('add-modal');
+    if (basePadding === null && sheet) {
+      basePadding = parseFloat(getComputedStyle(sheet).paddingBottom) || 40;
+    }
+    if (!modal.classList.contains('open')) return;
+    const keyboardH = window.innerHeight - window.visualViewport.height;
+    if (sheet && keyboardH > 50) {
+      sheet.style.paddingBottom = (basePadding + keyboardH) + 'px';
+    } else if (sheet) {
+      sheet.style.paddingBottom = '';
+    }
+  });
+}

@@ -11,7 +11,6 @@ export const App = {
 
   /* Gesture / mode flags */
   selectionMode: false,
-  dragActive: false,       // true when dragState is not null
 
   /* UI flags */
   currentScreen: 'home',
@@ -100,7 +99,7 @@ function seedDemoData() {
 ======================================== */
 
 export const LONG_PRESS_DELAY = 500;
-export const DRAG_DELAY = 300;
+export const DRAG_DELAY = 80;
 export const TAP_DRIFT = 10;
 export const SWIPE_MIN = 30;
 export const DELETE_DIST = 100;

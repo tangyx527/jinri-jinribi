@@ -100,7 +100,23 @@ export function renderHome() {
 
   // Render task list
   const filtered = App.currentFilter === 'all' ? tasks : tasks.filter(t => t.category === App.currentFilter);
+  renderTaskItems(tasks, filtered);
+
+  // Update today's history for heatmap/streak
+  updateTodayHistory();
+
+  // Notify app.js to bind gestures + update selection UI
+  _onAfterRender?.();
+}
+
+/* ========================================
+   TASK LIST RENDERING (used by renderHome + gesture)
+======================================== */
+
+export function renderTaskItems(allTasks, filtered) {
   const list = document.getElementById('task-list');
+
+  if (!list) return;
 
   if (filtered.length === 0) {
     list.innerHTML = `<div class="empty-state">
@@ -110,8 +126,8 @@ export function renderHome() {
           <polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/>
         </svg>
       </div>
-      <h3>${tasks.length === 0 ? '今天还没有任务' : '该分类暂无任务'}</h3>
-      <p>${tasks.length === 0 ? '点击右下角 + 添加你的第一个任务' : '试试切换其他分类'}</p>
+      <h3>${allTasks.length === 0 ? '今天还没有任务' : '该分类暂无任务'}</h3>
+      <p>${allTasks.length === 0 ? '点击右下角 + 添加你的第一个任务' : '试试切换其他分类'}</p>
     </div>`;
     return;
   }
@@ -143,12 +159,6 @@ export function renderHome() {
       </div>
     </div>
   `).join('');
-
-  // Update today's history for heatmap/streak
-  updateTodayHistory();
-
-  // Notify app.js to bind gestures + update selection UI
-  _onAfterRender?.();
 }
 
 /* ========================================
