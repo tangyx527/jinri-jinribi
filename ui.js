@@ -118,7 +118,7 @@ export function renderHome() {
 
   list.innerHTML = filtered.map((t, i) => `
     <div class="swipe-container" data-task-id="${t.id}" data-index="${i}">
-      <div class="swipe-delete" onclick="deleteTask('${t.id}')">删除</div>
+
       <div class="swipe-inner" data-task-id="${t.id}" style="animation-delay:${i * 40}ms">
         <div class="long-press-indicator"></div>
         <div class="task-card ${t.completed ? 'completed' : ''} ${t.selected ? 'selected' : ''}">
