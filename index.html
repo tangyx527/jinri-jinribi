@@ -1478,18 +1478,12 @@ function closeClearConfirm() {
   document.getElementById('clear-confirm-overlay').style.display = 'none';
 }
 function clearAllRecords() {
-  // Remove all history keys from localStorage
-  const keysToDelete = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && (key.startsWith('sl_history_') || key.startsWith('sl_tasks_'))) {
-      keysToDelete.push(key);
-    }
-  }
-  keysToDelete.forEach(k => localStorage.removeItem(k));
-  // Clear today's tasks too
+  // Clear the actual storage keys used by the app
+  localStorage.removeItem('serene_logic_v2');
+  localStorage.removeItem('serene_last_date');
+  // Reset in-memory state
+  state = { tasks: {}, history: {} };
   tasks = [];
-  saveTasks();
   closeClearConfirm();
   renderTasks();
   renderLog();
