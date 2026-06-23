@@ -268,6 +268,35 @@ body {
 
 /* Task Card */
 .task-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* Swipe container */
+.swipe-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+.swipe-delete {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 80px;
+  background: #ef4444;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  z-index: 0;
+}
+.swipe-delete:active { background: #dc2626; }
+.swipe-inner {
+  position: relative;
+  z-index: 1;
+  transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  touch-action: pan-y;
+}
+.swipe-inner.swiped { transform: translateX(-80px); }
+
 .task-card {
   background: var(--white);
   border-radius: var(--radius);
@@ -1091,21 +1120,29 @@ function renderHome() {
   }
 
   list.innerHTML = filtered.map((t, i) => `
-    <div class="task-card ${t.completed ? 'completed' : ''}" onclick="toggleTask('${t.id}')" style="animation-delay:${i*40}ms">
-      <div class="task-check">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      </div>
-      <div class="task-content">
-        <div class="task-title">${escapeHtml(t.title)}</div>
-        <div class="task-meta">
-          <span class="task-tag tag-${t.category}">${t.category === 'work' ? '工作' : '生活'}</span>
-          <span class="task-tag tag-${t.priority}">${t.priority === 'urgent' ? '紧急' : '日常'}</span>
+    <div class="swipe-container">
+      <div class="swipe-delete" onclick="deleteTask('${t.id}')">删除</div>
+      <div class="swipe-inner" data-task-id="${t.id}" style="animation-delay:${i*40}ms">
+        <div class="task-card ${t.completed ? 'completed' : ''}" onclick="toggleTask('${t.id}')">
+          <div class="task-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <div class="task-content">
+            <div class="task-title">${escapeHtml(t.title)}</div>
+            <div class="task-meta">
+              <span class="task-tag tag-${t.category}">${t.category === 'work' ? '工作' : '生活'}</span>
+              <span class="task-tag tag-${t.priority}">${t.priority === 'urgent' ? '紧急' : '日常'}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   `).join('');
+
+  // Bind swipe events
+  bindSwipeEvents();
 
   // Update history for today
   updateTodayHistory();
@@ -1133,6 +1170,58 @@ function toggleTask(id) {
   }
   saveState();
   renderHome();
+}
+
+function deleteTask(id) {
+  const tasks = getTodayTasks();
+  const idx = tasks.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  tasks.splice(idx, 1);
+  saveState();
+  renderHome();
+  showToast('任务已删除');
+}
+
+/* ========================================
+   SWIPE-TO-DELETE
+======================================== */
+function bindSwipeEvents() {
+  const SWIPE_THRESHOLD = 60;
+  const inners = document.querySelectorAll('.swipe-inner');
+  inners.forEach(inner => {
+    let startX = 0, currentX = 0, swiped = false;
+    inner.ontouchstart = e => {
+      startX = e.touches[0].clientX;
+      inner.style.transition = 'none';
+      swiped = inner.classList.contains('swiped');
+    };
+    inner.ontouchmove = e => {
+      currentX = e.touches[0].clientX;
+      const dx = currentX - startX;
+      if (dx > 10) { inner.style.transition = 'transform 250ms cubic-bezier(0.16,1,0.3,1)'; inner.style.transform = 'translateX(0)'; return; }
+      if (dx < -100) return;
+      if (!swiped && dx < 0) inner.style.transform = `translateX(${dx}px)`;
+      if (swiped && dx > 0) inner.style.transform = `translateX(${-80 + dx}px)`;
+    };
+    inner.ontouchend = e => {
+      const dx = currentX - startX;
+      inner.style.transition = 'transform 250ms cubic-bezier(0.16, 1, 0.3, 1)';
+      if (!swiped && dx < -SWIPE_THRESHOLD) {
+        inner.style.transform = 'translateX(-80px)';
+        inner.classList.add('swiped');
+      } else if (swiped && dx > SWIPE_THRESHOLD) {
+        inner.style.transform = 'translateX(0)';
+        inner.classList.remove('swiped');
+      } else {
+        inner.style.transform = swiped ? 'translateX(-80px)' : 'translateX(0)';
+      }
+    };
+    // Close swipe on scroll
+    inner.ontouchcancel = () => {
+      inner.style.transition = 'transform 250ms cubic-bezier(0.16, 1, 0.3, 1)';
+      inner.style.transform = swiped ? 'translateX(-80px)' : 'translateX(0)';
+    };
+  });
 }
 
 function filterTasks(btn, filter) {
