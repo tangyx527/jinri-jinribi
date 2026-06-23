@@ -68,6 +68,48 @@ body {
   color: var(--gray-500);
   margin-top: 2px;
 }
+.top-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.clear-records-btn {
+  font-size: 13px;
+  color: #ef4444;
+  background: #fff0f0;
+  border: 1px solid #fecaca;
+  border-radius: 20px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.clear-records-btn:active { background: #fee2e2; transform: scale(0.95); }
+
+/* Confirm overlay */
+.confirm-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 300; padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.confirm-sheet {
+  background: #fff; border-radius: 20px 20px 0 0;
+  padding: 28px 24px 32px; width: 100%; max-width: 430px;
+  animation: slideUp 0.25s ease;
+}
+.confirm-sheet h3 { font-size: 18px; font-weight: 700; color: #111; margin-bottom: 8px; }
+.confirm-sheet p { font-size: 14px; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }
+.confirm-actions { display: flex; gap: 12px; }
+.confirm-cancel {
+  flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 600;
+  background: #f3f4f6; color: #374151; border: none; cursor: pointer;
+}
+.confirm-delete {
+  flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 600;
+  background: #ef4444; color: #fff; border: none; cursor: pointer;
+}
 
 /* ===== BOTTOM NAV ===== */
 .bottom-nav {
@@ -688,7 +730,10 @@ body {
   <!-- ====== LOG SCREEN ====== -->
   <div class="screen" id="screen-log">
     <div class="top-header">
-      <h1>行为记录</h1>
+      <div class="top-header-row">
+        <h1>行为记录</h1>
+        <button class="clear-records-btn" onclick="openClearConfirm()">清除记录</button>
+      </div>
       <div class="subtitle">持续追踪，看见成长</div>
     </div>
 
@@ -882,6 +927,18 @@ body {
       <div class="modal-handle"></div>
       <div class="modal-title" id="day-modal-title">任务详情</div>
       <div class="day-detail-content" id="day-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Clear Records Confirm -->
+  <div class="confirm-overlay" id="clear-confirm-overlay" style="display:none" onclick="if(event.target===this)closeClearConfirm()">
+    <div class="confirm-sheet">
+      <h3>清除所有记录？</h3>
+      <p>这将删除所有历史任务记录、热力图数据和打卡信息，且无法恢复。</p>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" onclick="closeClearConfirm()">取消</button>
+        <button class="confirm-delete" onclick="clearAllRecords()">确认清除</button>
+      </div>
     </div>
   </div>
 
@@ -1409,6 +1466,35 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ========================================
+   CLEAR RECORDS
+======================================== */
+function openClearConfirm() {
+  document.getElementById('clear-confirm-overlay').style.display = 'flex';
+}
+function closeClearConfirm() {
+  document.getElementById('clear-confirm-overlay').style.display = 'none';
+}
+function clearAllRecords() {
+  // Remove all history keys from localStorage
+  const keysToDelete = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('sl_history_') || key.startsWith('sl_tasks_'))) {
+      keysToDelete.push(key);
+    }
+  }
+  keysToDelete.forEach(k => localStorage.removeItem(k));
+  // Clear today's tasks too
+  tasks = [];
+  saveTasks();
+  closeClearConfirm();
+  renderTasks();
+  renderLog();
+  renderProfile();
+  showToast('记录已清除');
 }
 
 /* ========================================
