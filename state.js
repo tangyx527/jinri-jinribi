@@ -33,7 +33,27 @@ export function loadState() {
   if (Object.keys(App.state.tasks).length === 0) seedDemoData();
 }
 
+let _saveTimer = null;
+
+/**
+ * Debounced save — coalesces rapid writes (e.g. drag loop) into a single
+ * localStorage.setItem every 200ms. Callers don't need to change anything.
+ * For urgent writes (import, page unload), use saveStateNow().
+ */
 export function saveState() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(App.state));
+  }, 200);
+}
+
+/**
+ * Immediate write — flushes any pending debounce and writes now.
+ * Use for import, pagehide, beforeunload.
+ */
+export function saveStateNow() {
+  clearTimeout(_saveTimer);
+  _saveTimer = null;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(App.state));
 }
 

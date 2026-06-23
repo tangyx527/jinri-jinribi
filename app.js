@@ -5,7 +5,7 @@
    initializes the application.
 ======================================== */
 
-import { App, loadState, saveState, getTodayKey } from './state.js';
+import { App, loadState, saveState, saveStateNow, getTodayKey } from './state.js';
 
 import { setStorageCallbacks, exportData, importData } from './storage.js';
 
@@ -109,6 +109,13 @@ if (lastDate && lastDate !== todayStr) {
   showToast('新的一天，新的开始 \uD83C\uDF31');
 }
 localStorage.setItem('serene_last_date', todayStr);
+
+/* ========================================
+   PAGE UNLOAD — flush debounced saveState
+======================================== */
+
+window.addEventListener('beforeunload', saveStateNow);
+window.addEventListener('pagehide', saveStateNow);
 
 /* ========================================
    KEYBOARD HANDLER

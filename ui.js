@@ -132,33 +132,104 @@ export function renderTaskItems(allTasks, filtered) {
     return;
   }
 
-  list.innerHTML = filtered.map((t, i) => `
-    <div class="swipe-container" data-task-id="${t.id}" data-index="${i}">
+  // ── H3: Incremental rendering — reuse DOM nodes instead of innerHTML string parse ──
 
-      <div class="swipe-inner" data-task-id="${t.id}" style="animation-delay:${i * 40}ms">
-        <div class="long-press-indicator"></div>
-        <div class="task-card ${t.completed ? 'completed' : ''} ${t.selected ? 'selected' : ''}">
-          <div class="select-checkbox">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div class="task-check">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div class="task-content">
-            <div class="task-title">${escapeHtml(t.title)}</div>
-            <div class="task-meta">
-              <span class="task-tag tag-${t.category}">${t.category === 'work' ? '工作' : '生活'}</span>
-              <span class="task-tag tag-${t.priority}">${t.priority === 'urgent' ? '紧急' : '日常'}</span>
-            </div>
-          </div>
+  // 1. Index existing elements by data-task-id
+  const existingContainers = new Map();
+  const existingInners = new Map();
+  list.querySelectorAll('.swipe-container').forEach(el => {
+    existingContainers.set(el.dataset.taskId, el);
+  });
+  list.querySelectorAll('.swipe-inner').forEach(el => {
+    existingInners.set(el.dataset.taskId, el);
+  });
+
+  // 2. Build new list in data order
+  const fragment = document.createDocumentFragment();
+  const newIds = new Set();
+
+  filtered.forEach((t, i) => {
+    newIds.add(t.id);
+    let container = existingContainers.get(t.id);
+
+    if (container) {
+      // Reuse existing container — update state classes and meta tags in-place
+      const inner = existingInners.get(t.id);
+      if (inner) {
+        const card = inner.querySelector('.task-card');
+        if (card) {
+          card.classList.toggle('completed', t.completed);
+          card.classList.toggle('selected', t.selected);
+        }
+        inner.style.animationDelay = `${i * 40}ms`;
+
+        // Update category tag
+        const catTag = inner.querySelector('.task-tag.tag-work, .task-tag.tag-life');
+        if (catTag) {
+          catTag.className = `task-tag tag-${t.category}`;
+          catTag.textContent = t.category === 'work' ? '工作' : '生活';
+        }
+
+        // Update priority tag
+        const priTag = inner.querySelector('.task-tag.tag-urgent, .task-tag.tag-routine');
+        if (priTag) {
+          priTag.className = `task-tag tag-${t.priority}`;
+          priTag.textContent = t.priority === 'urgent' ? '紧急' : '日常';
+        }
+      }
+    } else {
+      // Create new element for newly added task
+      container = createTaskElement(t, i);
+    }
+
+    container.dataset.index = i;
+    fragment.appendChild(container);
+  });
+
+  // 3. Remove containers no longer in the filtered set
+  existingContainers.forEach((container, id) => {
+    if (!newIds.has(id)) container.remove();
+  });
+
+  // 4. Replace list content — avoids innerHTML HTML-parsing cost
+  list.innerHTML = '';
+  list.appendChild(fragment);
+}
+
+/**
+ * Create a fresh task DOM element from data (used for newly added tasks).
+ * Reused nodes get in-place class/text updates; only truly new tasks call this.
+ */
+function createTaskElement(t, i) {
+  const container = document.createElement('div');
+  container.className = 'swipe-container';
+  container.dataset.taskId = t.id;
+  container.dataset.index = i;
+
+  container.innerHTML = `<div class="swipe-inner" data-task-id="${t.id}" style="animation-delay:${i * 40}ms">
+    <div class="long-press-indicator"></div>
+    <div class="task-card ${t.completed ? 'completed' : ''} ${t.selected ? 'selected' : ''}">
+      <div class="select-checkbox">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="task-check">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="task-content">
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="task-meta">
+          <span class="task-tag tag-${t.category}">${t.category === 'work' ? '工作' : '生活'}</span>
+          <span class="task-tag tag-${t.priority}">${t.priority === 'urgent' ? '紧急' : '日常'}</span>
         </div>
       </div>
     </div>
-  `).join('');
+  </div>`;
+
+  return container;
 }
 
 /* ========================================

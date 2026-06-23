@@ -292,6 +292,9 @@ function startReorderDrag(inner, container, taskId, pointerY) {
   document.body.classList.add('gesture-active');
   document.body.classList.add('drag-locked');
 
+  // Cache all swipe-inner references at drag start (M1 fix — avoid repeated querySelectorAll)
+  const allInners = [...list.querySelectorAll('.swipe-inner')];
+
   dragState = {
     dragEl: inner,
     dragContainer: container,
@@ -305,6 +308,7 @@ function startReorderDrag(inner, container, taskId, pointerY) {
     initialDelta: 0,
     _stopSpring: null,
     _originalTasks: [...getTodayTasks()].map(t => ({...t, selected: t.selected || false})),
+    allInners,                     // cached DOM node list — valid until drag ends
   };
 }
 
@@ -366,8 +370,7 @@ function applyDragUpdate(clientY) {
 }
 
 function updateCardGaps(fromIdx, toIdx, ds) {
-  const list = document.getElementById('task-list');
-  const allInners = [...list.querySelectorAll('.swipe-inner')];
+  const allInners = ds.allInners;  // M1: cached at drag start
 
   // C2 fix: absolute-position algorithm.
   // Every call independently decides each card's translateY based on
@@ -404,10 +407,8 @@ function endReorderDrag() {
   // ── 0. Immediate unlock — allow scrolling during spring (H1 fix) ──
   document.body.classList.remove('drag-locked');
 
-  const list = document.getElementById('task-list');
-
   // ── 1. Other cards: smooth CSS transition to natural position ──
-  list.querySelectorAll('.swipe-inner').forEach(inner => {
+  ds.allInners.forEach(inner => {
     if (inner !== ds.dragEl) {
       inner.classList.add('reorder-shift');
       inner.style.transform = 'translateY(0px)';
@@ -441,8 +442,7 @@ function cancelReorderDrag() {
   saveState();
 
   // ── 2. Other cards: smooth CSS transition back ──
-  const list = document.getElementById('task-list');
-  list.querySelectorAll('.swipe-inner').forEach(inner => {
+  ds.allInners.forEach(inner => {
     if (inner !== ds.dragEl) {
       inner.classList.add('reorder-shift');
       inner.style.transform = 'translateY(0px)';
@@ -473,8 +473,7 @@ function onDragComplete(ds) {
     ds._stopSpring = null;
   }
 
-  const list = document.getElementById('task-list');
-  list.querySelectorAll('.swipe-inner').forEach(inner => {
+  ds.allInners.forEach(inner => {
     inner.style.transition = '';
     inner.style.transform = 'translateY(0px)';
     inner.style.zIndex = '';

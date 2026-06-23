@@ -4,7 +4,7 @@
    Notifies app.js via callback after import.
 ======================================== */
 
-import { App, saveState, getTodayKey } from './state.js';
+import { App, saveState, saveStateNow, getTodayKey } from './state.js';
 
 /* Callback set by app.js */
 let _onImportSuccess = null;
@@ -42,6 +42,32 @@ export function exportData() {
    IMPORT
 ======================================== */
 
+/**
+ * Validate a single task object has all required fields with correct types.
+ * Returns { valid: boolean, reason: string }.
+ */
+function validateTask(task, dateKey, index) {
+  if (!task || typeof task !== 'object') {
+    return { valid: false, reason: `${dateKey}[${index}] 不是有效对象` };
+  }
+  if (typeof task.id !== 'string' || !task.id) {
+    return { valid: false, reason: `${dateKey}[${index}] 缺少有效 id` };
+  }
+  if (typeof task.title !== 'string' || !task.title.trim()) {
+    return { valid: false, reason: `"${task.id}" 缺少有效标题` };
+  }
+  if (!['work', 'life'].includes(task.category)) {
+    return { valid: false, reason: `"${task.title}" 分类无效（应为 work/life）` };
+  }
+  if (!['urgent', 'routine'].includes(task.priority)) {
+    return { valid: false, reason: `"${task.title}" 优先级无效（应为 urgent/routine）` };
+  }
+  if (typeof task.completed !== 'boolean') {
+    return { valid: false, reason: `"${task.title}" completed 字段不是布尔值` };
+  }
+  return { valid: true };
+}
+
 export function importData(event) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -65,9 +91,30 @@ export function importData(event) {
         throw new Error('文件缺少 history 字段或格式不正确');
       }
 
+      // Validate every task in the import
+      let invalidCount = 0;
+      const firstError = { dateKey: '', reason: '' };
+      for (const [dateKey, tasks] of Object.entries(data.tasks)) {
+        if (!Array.isArray(tasks)) {
+          invalidCount++;
+          if (!firstError.reason) firstError.reason = `${dateKey} 不是数组`;
+          continue;
+        }
+        for (let i = 0; i < tasks.length; i++) {
+          const result = validateTask(tasks[i], dateKey, i);
+          if (!result.valid) {
+            invalidCount++;
+            if (!firstError.reason) firstError.reason = result.reason;
+          }
+        }
+      }
+      if (invalidCount > 0) {
+        throw new Error(`${invalidCount} 个任务格式不正确（例：${firstError.reason}）`);
+      }
+
       App.state.tasks = data.tasks;
       App.state.history = data.history;
-      saveState();
+      saveStateNow();
       _onImportSuccess?.();
       _showToast?.('数据导入成功 \u2705');
     } catch (e) {
