@@ -3,13 +3,21 @@
    Cache First 策略 + 基础离线能力
 ======================================== */
 
-const CACHE_NAME = 'jinrishi-v1';
+const CACHE_NAME = 'jinrishi-v2';
 const PRE_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './app.js',
+  './state.js',
+  './storage.js',
+  './ui.js',
+  './actions.js',
+  './gesture.js',
+  './spring.js',
+  './drag-engine.js'
 ];
 
 /* ── INSTALL: 预缓存核心资源 ── */

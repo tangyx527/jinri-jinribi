@@ -1,37 +1,31 @@
-/* ========================================
-   gesture.js — Unified Gesture State Machine
-   idle → pressing → swiping / dragging / selecting
-
-   Priority: LongPress(500ms) > Drag(80ms) > Swipe > Click
-
-   Drag system: transform: translateY() only.
-   Data-driven reorder + translateY gap animation.
-   RAF-throttled pointermove.
-
-   Depends on: state.js, actions.js, ui.js
-======================================== */
+/**
+ * gesture.js — Unified Gesture State Machine (Facade)
+ *
+ * Delegates drag-to-reorder logic to drag-engine.js.
+ * Keeps: bindGestures() + multi-select logic.
+ *
+ * Exports (unchanged for app.js compatibility):
+ *   bindGestures, updateSelectionUI,
+ *   enterSelectionMode, exitSelectionMode,
+ *   toggleSelection, batchComplete, batchDelete
+ */
 
 import {
   App, saveState, getTodayTasks,
   LONG_PRESS_DELAY, DRAG_DELAY, TAP_DRIFT,
-  SWIPE_MIN, DELETE_DIST, MAX_DRAG
+  DELETE_DIST, MAX_DRAG
 } from './state.js';
 
 import { toggleTask, deleteTask } from './actions.js';
 import { renderHome, showToast } from './ui.js';
 
-/* ========================================
-   DRAG STATE (module-level)
-======================================== */
+import {
+  isDragActive, isRecentDrag,
+  startReorderDrag, scheduleDragUpdate,
+  endReorderDrag, cancelReorderDrag
+} from './drag-engine.js';
 
-let dragState = null;
-let postDragTimestamp = 0;  // click guard after drag release
-
-export function isDragActive() {
-  return dragState !== null;
-}
-
-/* ========================================
+/* =======================================
    UNIFIED GESTURE BINDER
 ======================================== */
 
@@ -47,7 +41,6 @@ export function bindGestures() {
 
     let cardState = 'idle';    // idle | pressing | swiping | dragging
     let startX = 0, startY = 0;
-    let lastX = 0, lastY = 0;
     let pressTimer = null;
     let dragTimer = null;
     let hasMoved = false;
@@ -64,7 +57,7 @@ export function bindGestures() {
       if (indicator) indicator.classList.remove('active');
       if (!keepPosition) {
         inner.style.transition = 'transform 280ms cubic-bezier(0.16, 1, 0.3, 1)';
-        if (!dragState) {
+        if (!isDragActive()) {
           inner.style.transform = 'translateX(0)';
         }
       }
@@ -75,14 +68,12 @@ export function bindGestures() {
     inner.addEventListener('pointerdown', e => {
       if (cardState === 'dragging') return;
       if (App.selectionMode) return;
-      if (dragState) return;
+      if (isDragActive()) return;
       if (inner.classList.contains('removing')) return;
 
       cardState = 'pressing';
       startX = e.clientX;
       startY = e.clientY;
-      lastX = startX;
-      lastY = startY;
       hasMoved = false;
       swipeLocked = false;
 
@@ -90,10 +81,10 @@ export function bindGestures() {
       inner.setPointerCapture(e.pointerId);
       if (indicator) indicator.classList.add('active');
 
-      // Drag timer: 80ms hold → drag-to-reorder (WeChat-level responsiveness)
+      // Drag timer: 80ms hold → drag-to-reorder
       dragTimer = setTimeout(() => {
         if (cardState !== 'pressing' || hasMoved || App.selectionMode) return;
-        if (dragState) return;
+        if (isDragActive()) return;
         startReorderDrag(inner, container, taskId, startY);
         cardState = 'dragging';
         clearTimeout(pressTimer);
@@ -102,7 +93,7 @@ export function bindGestures() {
       // Long-press timer: 500ms hold → selection mode
       pressTimer = setTimeout(() => {
         if (cardState !== 'pressing' || hasMoved || App.selectionMode) return;
-        if (dragState) return;
+        if (isDragActive()) return;
         enterSelectionMode(taskId);
         cardState = 'idle';
         reset(false);
@@ -117,10 +108,8 @@ export function bindGestures() {
         return;
       }
       if (cardState !== 'pressing') return;
-      if (dragState) return;
+      if (isDragActive()) return;
 
-      lastX = e.clientX;
-      lastY = e.clientY;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
 
@@ -171,7 +160,7 @@ export function bindGestures() {
 
       // Pure tap → complete task (with post-drag click guard)
       if (!hasMoved && !App.selectionMode && !swipeLocked) {
-        if (Date.now() - postDragTimestamp >= 150) {
+        if (!isRecentDrag()) {
           toggleTask(taskId);
         }
       }
@@ -194,301 +183,7 @@ export function bindGestures() {
   });
 }
 
-/* ========================================
-   SPRING PHYSICS ENGINE (WeChat-level)
-   Hooke's law: F = -k*x - c*v
-   Creates natural overshoot → decay like iOS/WeChat list.
-======================================== */
-
-/**
- * Spring-settle an element to targetY with RAF-driven physics.
- * @param {HTMLElement} el
- * @param {number} fromY - current translateY
- * @param {number} targetY - target translateY
- * @param {Function} onComplete
- * @returns {Function} stopSpring()
- */
-function springSettle(el, fromY, targetY, onComplete) {
-  let y = fromY;
-  let velocity = 0;
-  let running = true;
-  const k = 180;       // stiffness (lower = more overshoot)
-  const c = 26;        // damping
-  const mass = 1;
-  const precision = 0.25;
-  const dt = 0.016;    // ~60fps
-
-  function tick() {
-    if (!running) return;
-    const force = -k * (y - targetY);
-    const dampingForce = -c * velocity;
-    const acceleration = (force + dampingForce) / mass;
-
-    velocity += acceleration * dt;
-    y += velocity * dt;
-
-    el.style.transform = `translateY(${y}px)`;
-
-    if (Math.abs(y - targetY) < precision && Math.abs(velocity) < precision) {
-      el.style.transform = `translateY(${targetY}px)`;
-      running = false;
-      onComplete?.();
-      return;
-    }
-    requestAnimationFrame(tick);
-  }
-
-  requestAnimationFrame(tick);
-  return () => { running = false; };
-}
-
-/* ========================================
-   FILTER-AWARE INDEX MAPPING
-======================================== */
-
-/**
- * Map DOM-visible indices to full data indices.
- * When a filter is active, only matching tasks appear in DOM.
- * Returns { visibleTasks, visibleMap } where visibleMap[domIdx] = fullDataIdx.
- */
-function getVisibleTaskIndices() {
-  const tasks = getTodayTasks();
-  if (App.currentFilter === 'all') {
-    return { visibleTasks: tasks, visibleMap: tasks.map((_, i) => i) };
-  }
-  const visibleTasks = [];
-  const visibleMap = [];
-  tasks.forEach((t, i) => {
-    if (t.category === App.currentFilter) {
-      visibleTasks.push(t);
-      visibleMap.push(i);
-    }
-  });
-  return { visibleTasks, visibleMap };
-}
-
-/* ========================================
-   TRANSFORM-BASED DRAG-TO-REORDER
-   (WeChat-level enhanced)
-======================================== */
-
-function startReorderDrag(inner, container, taskId, pointerY) {
-  const list = document.getElementById('task-list');
-  const allContainers = [...list.querySelectorAll('.swipe-container')];
-  const startIdx = allContainers.indexOf(container);
-  if (startIdx < 0) return;
-
-  const containerRect = container.getBoundingClientRect();
-  const itemHeight = containerRect.height;
-
-  // Visual: drag card lifts up — scale + shadow via CSS .drag-active
-  inner.classList.add('drag-active');
-  inner.classList.remove('spring-return');
-  inner.style.transition = 'none';
-  inner.style.transform = 'translateY(0px)';
-  inner.style.zIndex = '999';
-
-  // Lock body during drag
-  document.body.classList.add('gesture-active');
-  document.body.classList.add('drag-locked');
-
-  // Cache all swipe-inner references at drag start (M1 fix — avoid repeated querySelectorAll)
-  const allInners = [...list.querySelectorAll('.swipe-inner')];
-
-  dragState = {
-    dragEl: inner,
-    dragContainer: container,
-    draggedTaskId: taskId,
-    startIndex: startIdx,
-    currentIndex: startIdx,
-    itemHeight,
-    containerCenter: containerRect.top + itemHeight / 2,
-    rafPending: false,
-    pendingY: pointerY,
-    initialDelta: 0,
-    _stopSpring: null,
-    _originalTasks: [...getTodayTasks()].map(t => ({...t, selected: t.selected || false})),
-    allInners,                     // cached DOM node list — valid until drag ends
-  };
-}
-
-function scheduleDragUpdate(clientY) {
-  if (!dragState) return;
-  dragState.pendingY = clientY;
-  if (dragState.rafPending) return;
-  dragState.rafPending = true;
-  requestAnimationFrame(() => {
-    if (!dragState) return;
-    dragState.rafPending = false;
-    applyDragUpdate(dragState.pendingY);
-  });
-}
-
-function applyDragUpdate(clientY) {
-  const ds = dragState;
-  if (!ds) return;
-
-  const fullTasks = getTodayTasks();
-  const { visibleTasks, visibleMap } = getVisibleTaskIndices();
-
-  // ── 1. Dragged card follows pointer ──
-  const rawDelta = clientY - ds.containerCenter;
-
-  // Boundary resistance: dampen when dragged past visible list edges
-  const resistanceThreshold = ds.itemHeight / 2;
-  const upperBound = -resistanceThreshold;
-  const lowerBound = (visibleTasks.length - 1) * ds.itemHeight - resistanceThreshold;
-
-  let deltaY = rawDelta;
-  if (rawDelta < upperBound) {
-    deltaY = upperBound + (rawDelta - upperBound) * 0.3;
-  } else if (rawDelta > lowerBound) {
-    deltaY = lowerBound + (rawDelta - lowerBound) * 0.3;
-  }
-
-  ds.dragEl.style.transform = `translateY(${deltaY}px)`;
-  ds.initialDelta = deltaY;
-
-  // ── 2. Calculate hover index (clamped to visible task count) ──
-  let hoverIndex = ds.currentIndex + Math.round(rawDelta / ds.itemHeight);
-  hoverIndex = Math.max(0, Math.min(hoverIndex, visibleTasks.length - 1));
-
-  // ── 3. Reorder if changed (map DOM indices → real data indices) ──
-  if (hoverIndex !== ds.currentIndex) {
-    const realFrom = visibleMap[ds.currentIndex];
-    const realTo = visibleMap[hoverIndex];
-
-    const [moved] = fullTasks.splice(realFrom, 1);
-    fullTasks.splice(realTo, 0, moved);
-    saveState();
-
-    // Visual gaps: affected cards get translateY shifts (DOM-index-based)
-    updateCardGaps(ds.currentIndex, hoverIndex, ds);
-
-    ds.currentIndex = hoverIndex;
-  }
-}
-
-function updateCardGaps(fromIdx, toIdx, ds) {
-  const allInners = ds.allInners;  // M1: cached at drag start
-
-  // C2 fix: absolute-position algorithm.
-  // Every call independently decides each card's translateY based on
-  // whether it sits between the drag card's start and target position.
-  // No "clear-all-then-reapply" — eliminates multi-step gap drift.
-  allInners.forEach((inner, domIdx) => {
-    if (inner === ds.dragEl) return;
-    inner.classList.add('reorder-shift');
-
-    if (toIdx > fromIdx) {
-      // Dragging down: cards in (fromIdx, toIdx] shift UP
-      if (domIdx > fromIdx && domIdx <= toIdx) {
-        inner.style.transform = `translateY(${-ds.itemHeight}px)`;
-      } else {
-        inner.style.transform = 'translateY(0px)';
-      }
-    } else if (toIdx < fromIdx) {
-      // Dragging up: cards in [toIdx, fromIdx) shift DOWN
-      if (domIdx >= toIdx && domIdx < fromIdx) {
-        inner.style.transform = `translateY(${ds.itemHeight}px)`;
-      } else {
-        inner.style.transform = 'translateY(0px)';
-      }
-    } else {
-      inner.style.transform = 'translateY(0px)';
-    }
-  });
-}
-
-function endReorderDrag() {
-  if (!dragState) return;
-  const ds = dragState;
-
-  // ── 0. Immediate unlock — allow scrolling during spring (H1 fix) ──
-  document.body.classList.remove('drag-locked');
-
-  // ── 1. Other cards: smooth CSS transition to natural position ──
-  ds.allInners.forEach(inner => {
-    if (inner !== ds.dragEl) {
-      inner.classList.add('reorder-shift');
-      inner.style.transform = 'translateY(0px)';
-    }
-  });
-
-  // ── 2. Dragged card: spring settle to slot ──
-  ds.dragEl.classList.add('spring-return');
-  ds.dragEl.style.transition = 'none';
-
-  const fromY = ds.initialDelta;
-  ds._stopSpring = springSettle(ds.dragEl, fromY, 0, () => {
-    onDragComplete(ds);
-  });
-
-  // ── 3. Set click guard ──
-  postDragTimestamp = Date.now();
-}
-
-function cancelReorderDrag() {
-  if (!dragState) return;
-  const ds = dragState;
-
-  // ── 0. Immediate unlock (H1 fix) ──
-  document.body.classList.remove('drag-locked');
-
-  // ── 1. Restore original data from snapshot (robust against filter shifts) ──
-  const tasks = getTodayTasks();
-  tasks.length = 0;
-  ds._originalTasks.forEach(t => tasks.push({...t}));
-  saveState();
-
-  // ── 2. Other cards: smooth CSS transition back ──
-  ds.allInners.forEach(inner => {
-    if (inner !== ds.dragEl) {
-      inner.classList.add('reorder-shift');
-      inner.style.transform = 'translateY(0px)';
-    }
-  });
-
-  // ── 3. Dragged card: spring snap-back ──
-  ds.dragEl.classList.add('spring-return');
-  ds.dragEl.style.transition = 'none';
-
-  const fromY = ds.initialDelta;
-  ds._stopSpring = springSettle(ds.dragEl, fromY, 0, () => {
-    onDragComplete(ds);
-  });
-
-  // ── 4. Set click guard ──
-  postDragTimestamp = Date.now();
-}
-
-/**
- * Shared cleanup after spring animation completes.
- * Reconciles DOM, clears drag state, restores body classes.
- */
-function onDragComplete(ds) {
-  // Cancel any still-running spring (H5 fix — safety against stale DOM refs)
-  if (ds._stopSpring) {
-    ds._stopSpring();
-    ds._stopSpring = null;
-  }
-
-  ds.allInners.forEach(inner => {
-    inner.style.transition = '';
-    inner.style.transform = 'translateY(0px)';
-    inner.style.zIndex = '';
-    inner.classList.remove('drag-active', 'spring-return', 'reorder-shift');
-  });
-
-  document.body.classList.remove('gesture-active');
-  document.body.classList.remove('drag-locked');
-  dragState = null;
-
-  // Final render syncs DOM to data
-  renderHome();
-}
-
-/* ========================================
+/* =======================================
    MULTI-SELECTION LOGIC
 ======================================== */
 
@@ -551,7 +246,7 @@ export function batchComplete() {
   selTasks.forEach(t => { t.completed = true; t.selected = false; });
   saveState();
   exitSelectionMode();
-  showToast(`${selTasks.length} 个任务已完成 \u2705`);
+  showToast(`${selTasks.length} 个任务已完成 ✅`);
 }
 
 export function batchDelete() {
