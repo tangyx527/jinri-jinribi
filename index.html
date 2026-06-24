@@ -313,15 +313,32 @@ body {
   width: 100%; max-width: 430px; margin: 0 auto;
   background: var(--white); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 0 24px 40px;
+  /* 改用 bottom + transform 组合：
+     - bottom: 控制弹窗底部距视口底部的距离（默认 0，键盘弹起时 = 键盘高度）
+     - transform: 仅用于打开/关闭的过渡动画
+     避免两个 transform 叠加冲突 */
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
   transform: translateY(100%);
   transition: transform 350ms var(--ease-out);
-  will-change: transform;
+  will-change: transform, bottom;
 }
-.modal-overlay.open .modal-sheet { transform: translateY(0); }
-/* 键盘弹起时向上偏移（由 JS 动态设置 --kb-offset） */
+.modal-overlay.open .modal-sheet {
+  transform: translateY(0);
+}
+/* 键盘弹起状态：弹窗底部贴合键盘上沿，无额外 transform */
 .modal-overlay.keyboard-open .modal-sheet {
-  transform: translateY(calc(var(--kb-offset, 0px)));
-  transition: transform 200ms var(--ease-out);
+  transform: translateY(0);
+  /* bottom 由 JS 实时动态设置，不写在 CSS 中避免 calc 冲突 */
+  transition: bottom 250ms var(--ease-out);
+}
+/* 键盘收起恢复：弹窗底部归零，平滑过渡 */
+.modal-overlay.keyboard-close .modal-sheet {
+  bottom: 0;
+  transition: bottom 250ms var(--ease-out);
 }
 .modal-handle { width: 36px; height: 4px; background: var(--gray-200); border-radius: 2px; margin: 12px auto 20px; }
 .modal-title  { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 20px; }
@@ -1012,131 +1029,87 @@ body {
 (function registerSW() {
   if (!('serviceWorker' in navigator)) return;
 
-  var _swUpdated = false;       // 是否检测到新版本
-  var _swRegistration = null;   // 保存 SW 注册对象引用
+  var _swUpdated = false;
+  var _swRegistration = null;
 
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./service-worker.js', { scope: './' })
-      .then(function (reg) {
-        _swRegistration = reg;
+  // ★ 立即注册 SW（不等待 load），确保 beforeinstallprompt 触发前 SW 已就绪
+  navigator.serviceWorker.register('./service-worker.js', { scope: './' })
+    .then(function (reg) {
+      _swRegistration = reg;
 
-        // ---- 情况1：已存在 SW 控制器，检测是否有更新 ----
-        if (reg.active && navigator.serviceWorker.controller) {
-          // 主动查询 SW 版本号（用于后续比对）
-          if (reg.active) {
-            reg.active.postMessage('GET_VERSION');
-          }
-        }
-
-        // ---- 情况2：新 SW 正在安装中（首次安装或更新） ----
-        reg.addEventListener('updatefound', function () {
-          var newWorker = reg.installing;
-          if (!newWorker) return;
-
-          newWorker.addEventListener('statechange', function () {
-            // 新 SW 安装完成，等待激活
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // 存在旧 SW → 说明是更新，显示提示条
-              _swUpdated = true;
-              showUpdateBanner();
-            }
-          });
-        });
-      })
-      .catch(function (err) {
-        // SW 注册失败（HTTP 环境等），静默处理
-        // 应用仍可正常使用，只是无离线缓存
-      });
-
-    // ---- 定期检查更新（每 30 分钟） ----
-    setInterval(function () {
-      if (_swRegistration) {
-        _swRegistration.update().catch(function () {});
+      if (reg.active && navigator.serviceWorker.controller) {
+        reg.active.postMessage('GET_VERSION');
       }
-    }, 30 * 60 * 1000);
-  });
 
-  // ---- 监听 SW 发来的消息 ----
+      reg.addEventListener('updatefound', function () {
+        var newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', function () {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            _swUpdated = true;
+            showUpdateBanner();
+          }
+        });
+      });
+    })
+    .catch(function () {});
+
+  // 定期检查更新
+  setInterval(function () {
+    if (_swRegistration) _swRegistration.update().catch(function () {});
+  }, 30 * 60 * 1000);
+
   navigator.serviceWorker.addEventListener('message', function (event) {
     var data = event.data;
-
-    // SW 激活后通知：新版本已接管，可刷新
-    if (data && data.type === 'SW_UPDATED') {
-      _swUpdated = true;
-      showUpdateBanner();
-    }
-
-    // SW 返回版本号
-    if (data && data.type === 'SW_VERSION') {
-      // 如果 SW 版本与页面声明的 APP_VERSION 不一致，视为有更新
-      if (data.version && data.version !== APP_VERSION) {
-        _swUpdated = true;
-        showUpdateBanner();
-      }
+    if (data && data.type === 'SW_UPDATED') { _swUpdated = true; showUpdateBanner(); }
+    if (data && data.type === 'SW_VERSION' && data.version && data.version !== APP_VERSION) {
+      _swUpdated = true; showUpdateBanner();
     }
   });
 
-  // ---- 监听 controllerchange 事件（双保险机制） ----
-  // 当 skipWaiting() 让新 SW 激活并接管页面时，浏览器触发此事件
-  // 这是检测更新的最可靠方式，不依赖 postMessage 时序
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     _swUpdated = true;
     showUpdateBanner();
   });
 
-  /**
-   * 显示页面顶部更新提示条
-   * 带柔和的滑入动画，匹配页面浅绿风格
-   */
   function showUpdateBanner() {
     var banner = document.getElementById('sw-update-banner');
-    if (!banner) return;
-    banner.classList.add('show');
+    if (banner) banner.classList.add('show');
   }
 
-  /**
-   * 隐藏更新提示条（用户点击关闭按钮）
-   * 暴露到全局作用域供 onclick 调用
-   */
   window.hideUpdateBanner = function () {
     var banner = document.getElementById('sw-update-banner');
-    if (!banner) return;
-    banner.classList.remove('show');
+    if (banner) banner.classList.remove('show');
   };
 
-  /**
-   * 用户点击「立即刷新」→ 刷新页面应用新版本
-   * 暴露到全局作用域供 onclick 调用
-   */
   window.refreshToUpdate = function () {
-    // 先尝试让 waiting SW 跳过等待
     if (_swRegistration && _swRegistration.waiting) {
       _swRegistration.waiting.postMessage('SKIP_WAITING');
     }
-    // 刷新页面，新 SW 激活后加载最新缓存
     window.location.reload();
   };
 })();
 
-// ---- PWA 安装弹窗（所有浏览器统一弹出原生安装提示） ----
+// ---- PWA 安装弹窗（所有浏览器） ----
 (function () {
-  var _installPrompt = null;
+  // 已安装则不处理
+  if (window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      navigator.standalone) {
+    return;
+  }
 
-  // 标准渠道：Chrome / Edge / 等
+  // ★ 不调用 preventDefault()，让浏览器自行弹出原生安装提示
+  // 监听事件仅用于日志/统计目的
   window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();
-    _installPrompt = e;
+    // 什么都不做，浏览器会自动弹出安装 UI
+    console.log('[PWA] beforeinstallprompt 已触发，浏览器将显示安装提示');
   });
 
-  // 延迟弹出，确保页面加载完成后触发
-  setTimeout(function () {
-    if (_installPrompt) {
-      _installPrompt.prompt();
-      _installPrompt.userChoice.then(function () {
-        _installPrompt = null;
-      });
-    }
-  }, 1500);
+  // 安装成功回调
+  window.addEventListener('appinstalled', function () {
+    console.log('[PWA] 应用已安装');
+  });
 })();
 
 /* ============================================================
@@ -1370,102 +1343,208 @@ function triggerCelebration() {
 }
 
 /* ============================================================
-   7. 添加任务弹窗
+   7. 添加任务弹窗 + 键盘适配
+   ============================================================
+   多层级兼容方案：
+   - 第一层：visualViewport API（iOS 13+, Android Chrome 84+）
+   - 第二层：window resize 事件（老旧设备降级）
+   - 定位修复：动态修改 .modal-sheet 的 bottom 值，避免 transform 叠加冲突
+   - 延迟校准：rAF + 120ms 延迟等待键盘动画稳定
+   - 安全区域：兼容 iOS safe-area-inset-bottom
    ============================================================ */
 var _kbListening = false;
 var _kbBaseHeight = 0;
 var _kbRafId = 0;
+var _kbDelayTimer = 0;
+var _kbLastHeight = 0;
+
+/**
+ * 获取键盘估算高度（像素），返回 0 表示键盘未弹起
+ */
+function getKeyboardHeight() {
+  var vv = window.visualViewport;
+  var innerH = window.innerHeight;
+  if (vv) {
+    return Math.max(0, innerH - vv.height - (vv.offsetTop || 0));
+  }
+  // 降级：对比 window.innerHeight 变化（老旧设备）
+  if (_kbBaseHeight > 0 && innerH < _kbBaseHeight) {
+    return _kbBaseHeight - innerH;
+  }
+  return 0;
+}
+
+/**
+ * 获取 iOS 安全区域底部偏移
+ */
+function getSafeAreaBottom() {
+  var val = getComputedStyle(document.documentElement)
+    .getPropertyValue('env(safe-area-inset-bottom)');
+  if (!val || val === '0px') return 0;
+  return parseFloat(val) || 0;
+}
+
+/**
+ * 核心定位修复：动态修改 .modal-sheet 的 bottom 值
+ * 弹窗底部 = 键盘高度 - 安全区域，确保贴合键盘上沿
+ */
+function adjustForKeyboard() {
+  var overlay = document.getElementById('add-modal');
+  if (!overlay || !overlay.classList.contains('open')) return;
+
+  var sheet = overlay.querySelector('.modal-sheet');
+  if (!sheet) return;
+
+  var keyboardH = getKeyboardHeight();
+  var safeBottom = getSafeAreaBottom();
+  var THRESHOLD = 45;
+
+  // 高度无变化跳过，减少不必要 DOM 操作
+  if (keyboardH === _kbLastHeight) return;
+  _kbLastHeight = keyboardH;
+
+  if (keyboardH > THRESHOLD) {
+    // === 键盘弹起 ===
+    var targetBottom = keyboardH - safeBottom;
+    overlay.classList.remove('keyboard-close');
+    sheet.style.bottom = targetBottom + 'px';
+    overlay.classList.add('keyboard-open');
+  } else {
+    // === 键盘收起 ===
+    overlay.classList.remove('keyboard-open');
+    overlay.classList.add('keyboard-close');
+    sheet.style.bottom = '0px';
+    // 过渡完成后清除关闭动画类
+    clearTimeout(_kbDelayTimer);
+    _kbDelayTimer = setTimeout(function () {
+      overlay.classList.remove('keyboard-close');
+    }, 300);
+  }
+}
+
+/**
+ * 延迟校准调度：rAF + 120ms 等待键盘动画稳定后再计算
+ */
+function scheduleKeyboardAdjust() {
+  if (_kbRafId) return;
+  _kbRafId = requestAnimationFrame(function () {
+    _kbRafId = 0;
+    clearTimeout(_kbDelayTimer);
+    _kbDelayTimer = setTimeout(function () {
+      adjustForKeyboard();
+    }, 120);
+  });
+}
+
+/**
+ * visualViewport 事件处理（第一层检测，现代设备优先）
+ */
+function onViewportChange() {
+  scheduleKeyboardAdjust();
+}
+
+/**
+ * window resize 事件处理（第二层降级，老旧设备兼容）
+ * 如果 visualViewport 可用则跳过，避免重复处理
+ */
+function onWindowResizeForKb() {
+  if (window.visualViewport) return;
+  scheduleKeyboardAdjust();
+}
 
 /**
  * 启动键盘适配监听（弹窗打开时调用）
- * 使用 visualViewport API 监听可视区域高度变化，
- * 兼容 PWA standalone 模式与普通浏览器模式
  */
 function startKeyboardAdapt() {
-  if (!window.visualViewport || _kbListening) return;
+  if (_kbListening) return;
   _kbListening = true;
 
-  // 记录初始可视高度作为基准
   _kbBaseHeight = window.innerHeight;
+  _kbLastHeight = 0;
 
-  window.visualViewport.addEventListener('resize', onViewportResize);
-  window.visualViewport.addEventListener('scroll', onViewportResize);
+  // 第一层：visualViewport API
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onViewportChange);
+    window.visualViewport.addEventListener('scroll', onViewportChange);
+  }
+
+  // 第二层：window resize（降级兼容）
+  window.addEventListener('resize', onWindowResizeForKb);
+
+  // 屏幕旋转监听（部分浏览器先触发 orientationchange 再 resize）
+  window.addEventListener('orientationchange', onWindowResizeForKb);
 }
 
 /**
  * 停止键盘适配监听（弹窗关闭时调用）
  */
 function stopKeyboardAdapt() {
-  if (!window.visualViewport || !_kbListening) return;
+  if (!_kbListening) return;
   _kbListening = false;
 
-  window.visualViewport.removeEventListener('resize', onViewportResize);
-  window.visualViewport.removeEventListener('scroll', onViewportResize);
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', onViewportChange);
+    window.visualViewport.removeEventListener('scroll', onViewportChange);
+  }
 
-  // 移除键盘偏移，恢复弹窗原位置
+  window.removeEventListener('resize', onWindowResizeForKb);
+  window.removeEventListener('orientationchange', onWindowResizeForKb);
+
+  clearTimeout(_kbDelayTimer);
+
+  // 恢复弹窗原位
   var overlay = document.getElementById('add-modal');
   if (overlay) {
-    overlay.classList.remove('keyboard-open');
-    overlay.style.removeProperty('--kb-offset');
+    overlay.classList.remove('keyboard-open', 'keyboard-close');
+    var sheet = overlay.querySelector('.modal-sheet');
+    if (sheet) {
+      sheet.style.bottom = '0px';
+    }
   }
+
+  _kbLastHeight = 0;
 }
 
 /**
- * visualViewport resize/scroll 事件处理
- * 使用 requestAnimationFrame 节流，避免高频触发造成抖动
+ * 输入框保可视：确保聚焦的输入框完整出现在可视区域内
+ * 双方案兜底：scrollIntoView + 手动滚动偏移
  */
-function onViewportResize() {
-  if (_kbRafId) return;
-  _kbRafId = requestAnimationFrame(function () {
-    _kbRafId = 0;
-    adjustForKeyboard();
-  });
-}
+function ensureInputVisible(inputEl) {
+  if (!inputEl) return;
 
-/**
- * 根据键盘弹起高度，动态偏移底部弹窗
- *
- * 计算逻辑：
- *   keyboardHeight = window.innerHeight - visualViewport.height - visualViewport.offsetTop
- *   当 keyboardHeight > 60px 时判定键盘已弹起，将弹窗向上偏移 keyboardHeight
- *   偏移上限为视口高度的 60%，防止小屏设备偏移过度
- */
-function adjustForKeyboard() {
-  var overlay = document.getElementById('add-modal');
-  if (!overlay || !overlay.classList.contains('open')) return;
+  // 等待键盘弹起后执行（键盘弹起约 250-350ms）
+  setTimeout(function () {
+    // 方案1：scrollIntoView（标准方案）
+    if (inputEl.scrollIntoView) {
+      inputEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
 
-  var vv = window.visualViewport;
-  if (!vv) return;
+    // 方案2：手动计算偏移（iOS PWA 中 scrollIntoView 可能不生效）
+    setTimeout(function () {
+      var rect = inputEl.getBoundingClientRect();
+      var vv = window.visualViewport;
+      var viewH = vv ? vv.height : window.innerHeight;
+      var targetBottom = viewH - 20;
 
-  // 键盘高度 = 窗口高度 - 可视区域高度 - 可视区域顶部偏移
-  var vpHeight = window.innerHeight;
-  var keyboardHeight = vpHeight - vv.height - (vv.offsetTop || 0);
-
-  // 阈值：键盘高度 > 60px 才认为是键盘弹起（排除地址栏收起等小幅变化）
-  var KEYBOARD_THRESHOLD = 60;
-
-  if (keyboardHeight > KEYBOARD_THRESHOLD) {
-    // 键盘弹起 → 向上偏移
-    // 限制最大偏移量，避免小屏设备偏移过度
-    var maxOffset = Math.min(keyboardHeight, vpHeight * 0.6);
-    overlay.style.setProperty('--kb-offset', '-' + maxOffset + 'px');
-    overlay.classList.add('keyboard-open');
-  } else {
-    // 键盘收起 → 恢复原位
-    overlay.classList.remove('keyboard-open');
-    overlay.style.removeProperty('--kb-offset');
-  }
+      if (rect.bottom > targetBottom) {
+        var scrollNeeded = rect.bottom - targetBottom + 10;
+        try { window.scrollBy(0, scrollNeeded); } catch (e) {}
+      }
+    }, 150);
+  }, 100);
 }
 
 function openAddModal() {
   $('add-modal').classList.add('open');
   $('task-input').value = '';
+
+  // 弹窗打开动画完成后聚焦并启动键盘适配
   setTimeout(function () {
     var inp = $('task-input');
     if (inp) {
       inp.focus();
-      // 聚焦后启动键盘适配监听
       startKeyboardAdapt();
+      ensureInputVisible(inp);
     }
   }, 400);
 }
