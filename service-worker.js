@@ -9,7 +9,7 @@
 ============================================================ */
 
 /* ---- 缓存版本（发版时递增此处） ---- */
-var CACHE_VERSION = 'serene-today-v1';
+var CACHE_VERSION = 'serene-today-v2';
 var CACHE_NAME = 'serene-today-' + CACHE_VERSION;
 
 /* ---- 预缓存资源列表（相对路径，适配子目录部署） ---- */

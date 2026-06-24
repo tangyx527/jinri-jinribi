@@ -40,5 +40,8 @@
   ],
   "screenshots": [],
   "related_applications": [],
-  "launch_handler": { "client_mode": "navigate-existing" }
+  "launch_handler": { "client_mode": "navigate-existing" },
+  "edge_side_panel": {},
+  "handle_links": "preferred",
+  "note_taking": {}
 }

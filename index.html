@@ -13,12 +13,16 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-title" content="今日待办">
 
-<!-- iOS Safari 桌面兼容 -->
+<!-- iOS Safari 桌面兼容（添加到主屏幕后以独立 App 模式运行） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="今日待办">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- apple-touch-icon：iOS 添加到桌面时的图标（多尺寸覆盖） -->
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png">
+<!-- apple-touch-icon-precomposed：禁用 iOS 自动添加高光/圆角效果，保留原始图标 -->
+<link rel="apple-touch-icon-precomposed" sizes="192x192" href="./icons/icon-192.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -1139,6 +1143,52 @@ body {
 
   // ---- PWA 安装提示 ----
   var _installPrompt = null; // 保存 beforeinstallprompt 事件
+  var _platform = '';        // 平台标识：'chrome' | 'ios' | 'other'
+
+  /**
+   * 分平台检测，返回平台标识
+   * - 'chrome': 桌面端 Chrome/Edge 或 Android Chrome（支持 beforeinstallprompt）
+   * - 'ios': iOS 全浏览器（Safari / Chrome-iOS / Edge-iOS / Firefox-iOS 等均使用 WebKit）
+   * - 'other': 微信 / UC / QQ / 华为 / 夸克 / 小米等内置浏览器（不支持原生 PWA，展示引导）
+   */
+  function detectPlatform() {
+    if (_platform) return _platform;
+
+    var ua = navigator.userAgent || '';
+    var plat = navigator.platform || '';
+
+    // ---- 检测 iOS 设备（所有 iOS 浏览器底层均为 WebKit，均支持"添加到主屏幕"） ----
+    var isIOS = /iPad|iPhone|iPod/.test(ua) ||
+                (plat === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    // ---- 检测不支持原生 PWA 但需要展示引导的环境 ----
+    // 微信内置浏览器
+    var isWeChat = /MicroMessenger/i.test(ua);
+    // UC 浏览器
+    var isUC = /UCBrowser|UCWEB/i.test(ua);
+    // QQ 浏览器
+    var isQQ = /MQQBrowser/i.test(ua);
+    // 百度浏览器
+    var isBaidu = /baidubrowser|baiduboxapp/i.test(ua);
+    // 华为浏览器
+    var isHuawei = /HuaweiBrowser/i.test(ua);
+    // 夸克浏览器
+    var isQuark = /Quark/i.test(ua);
+    // 小米内置浏览器
+    var isMiui = /MiuiBrowser/i.test(ua);
+
+    var isOther = isWeChat || isUC || isQQ || isBaidu || isHuawei || isQuark || isMiui;
+
+    if (isOther) {
+      _platform = 'other';
+    } else if (isIOS) {
+      _platform = 'ios';
+    } else {
+      _platform = 'chrome'; // 桌面 Chrome/Edge/Opera 或 Android Chrome/Edge/Samsung Internet 等
+    }
+
+    return _platform;
+  }
 
   /**
    * 监听 beforeinstallprompt 事件（桌面端 Chrome / Android Chrome）
@@ -1149,6 +1199,8 @@ body {
     e.preventDefault();
     // 保存事件引用，供后续手动触发
     _installPrompt = e;
+    // 更新平台标识为 chrome
+    _platform = 'chrome';
     // 显示安装按钮
     showInstallButton();
   });
@@ -1165,34 +1217,73 @@ body {
 
   /**
    * 检测当前浏览器是否支持 PWA 安装
-   * 判断依据：是否触发了 beforeinstallprompt 或是否为 iOS Safari
+   * 判断依据：
+   *   chrome 平台 → beforeinstallprompt 已触发
+   *   ios 平台 → 任何 iOS 浏览器（WebKit 底层均支持"添加到主屏幕"）
+   *   other 平台 → 显示按钮并弹出引导（微信/UC/QQ 等不支持原生 PWA）
    */
   function isPWAInstallable() {
-    // 桌面端 Chrome/Edge 和 Android Chrome 会触发 beforeinstallprompt
-    if (_installPrompt) return true;
-    // iOS Safari 不支持 beforeinstallprompt，但支持添加到主屏幕
-    var ua = navigator.userAgent;
-    var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    var isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|mercury/.test(ua);
-    return isIOS && isSafari;
+    var platform = detectPlatform();
+
+    if (platform === 'ios') return true;
+    if (platform === 'other') return true;
+    // chrome 平台：依赖 beforeinstallprompt 触发
+    if (platform === 'chrome' && _installPrompt) return true;
+
+    return false;
   }
 
   /**
-   * 显示「安装到桌面」按钮
+   * 更新安装按钮的文案和图标（按平台适配）
+   */
+  function updateInstallButtonLabel() {
+    var btn = document.querySelector('.pwa-install-btn');
+    if (!btn) return;
+
+    var platform = detectPlatform();
+    var svgIcon = '';
+    var label = '';
+
+    if (platform === 'ios') {
+      // iOS 全浏览器 → "添加到主屏幕"
+      svgIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<rect x="3" y="3" width="18" height="18" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>' +
+                '<line x1="12" y1="5" x2="12" y2="9"/></svg>';
+      label = '添加到主屏幕';
+    } else if (platform === 'other') {
+      // 微信/UC/QQ 等 → "添加到桌面"（引导用户用系统浏览器打开）
+      svgIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<rect x="3" y="3" width="18" height="18" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>' +
+                '<line x1="12" y1="5" x2="12" y2="9"/></svg>';
+      label = '添加到桌面';
+    } else {
+      // 桌面 / Android Chrome → "安装到桌面"
+      svgIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<rect x="3" y="3" width="18" height="18" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>';
+      label = '安装到桌面';
+    }
+
+    btn.innerHTML = svgIcon + label;
+  }
+
+  /**
+   * 显示安装按钮
    * 仅在满足以下条件时显示：
    * 1. 未以 PWA 模式运行（未安装）
-   * 2. 浏览器支持 PWA 安装（_installPrompt 已触发或 iOS Safari）
+   * 2. 浏览器支持 PWA 安装
    */
   function showInstallButton() {
     if (isPWAInstalled()) return;
     var row = document.getElementById('pwa-install-row');
     if (!row) return;
+    // 更新按钮文案
+    updateInstallButtonLabel();
     row.style.display = 'block';
   }
 
   /**
-   * 隐藏「安装到桌面」按钮
-   * 在 appinstalled 事件触发后调用
+   * 隐藏安装按钮
+   * 在 appinstalled 事件触发后调用，或检测到不支持的环境时调用
    */
   function hideInstallButton() {
     var row = document.getElementById('pwa-install-row');
@@ -1201,47 +1292,55 @@ body {
   }
 
   /**
-   * 用户点击「安装到桌面」按钮 → 主动唤起系统安装弹窗
+   * 用户点击安装按钮 → 按平台分发行为
    * 暴露到全局作用域供 onclick 调用
    *
    * 兼容策略：
    * - Chrome/Edge/Android: 通过 beforeinstallprompt.prompt() 唤起原生弹窗
-   * - iOS Safari: 不支持 prompt()，展示图文引导提示
+   * - iOS 全浏览器: 展示图文引导弹窗
+   * - 不支持环境: 此按钮不可见，理论上不会触发
    */
   window.promptInstall = function () {
+    var platform = detectPlatform();
+
+    // ---- Chrome/Edge/Android：唤起系统原生安装弹窗 ----
     if (_installPrompt) {
-      // 桌面端 Chrome / Android Chrome：唤起系统原生安装弹窗
       _installPrompt.prompt();
-      // 等待用户选择
       _installPrompt.userChoice.then(function (choice) {
         if (choice.outcome === 'accepted') {
-          // 用户点击了安装
           hideInstallButton();
         }
-        // 清除事件引用（每个 beforeinstallprompt 只能 prompt() 一次）
         _installPrompt = null;
       });
       return;
     }
 
-    // iOS Safari 降级：展示图文引导
-    var ua = navigator.userAgent;
-    var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    var isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|mercury/.test(ua);
-
-    if (isIOS && isSafari) {
+    // ---- iOS 全浏览器：展示图文引导弹窗 ----
+    if (platform === 'ios') {
       showIOSInstallGuide();
       return;
     }
 
-    // 其他不支持的环境
-    showToast('请使用浏览器菜单中的「添加到主屏幕」或「安装」功能');
+    // ---- 微信/UC/QQ 等不支持原生 PWA 的环境：展示通用引导弹窗 ----
+    if (platform === 'other') {
+      showOtherInstallGuide();
+      return;
+    }
+
+    // 兜底
+    showToast('请使用浏览器菜单中的「添加到主屏幕」功能');
   };
 
   /**
-   * iOS Safari 安装引导弹窗
-   * 因为 iOS 不支持 beforeinstallprompt API，
-   * 需要图文引导用户通过 Safari 分享菜单手动添加
+   * iOS 全浏览器安装引导弹窗
+   * 覆盖 Safari / Chrome-iOS / Edge-iOS / Firefox-iOS（底层均为 WebKit）
+   *
+   * 分步引导：
+   * 1. 点击底部工具栏的分享按钮（向上箭头的方框图标）
+   * 2. 在弹出菜单中滑动找到「添加到主屏幕」
+   * 3. 点击「添加」完成安装
+   *
+   * 适配：底部弹出式 Sheet，圆角柔和，支持 Safe Area，带关闭按钮
    */
   function showIOSInstallGuide() {
     // 检查是否已有引导弹窗
@@ -1250,52 +1349,251 @@ body {
     var overlay = document.createElement('div');
     overlay.id = 'ios-install-guide';
     overlay.style.cssText =
-      'position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.55);' +
-      'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);' +
+      'position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.5);' +
+      'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);' +
       'display:flex;align-items:flex-end;justify-content:center;' +
       'padding-bottom:env(safe-area-inset-bottom,20px);';
 
     var sheet = document.createElement('div');
     sheet.style.cssText =
       'background:var(--white);border-radius:20px 20px 0 0;' +
-      'padding:28px 24px 32px;width:100%;max-width:430px;' +
-      'animation:slideUp 0.3s ease;';
+      'padding:24px 24px 32px;width:100%;max-width:430px;' +
+      'animation:slideUp 0.35s var(--ease-out);position:relative;';
 
+    // 关闭按钮（右上角 ×）
     sheet.innerHTML =
-      '<h3 style="font-size:18px;font-weight:700;color:var(--gray-900);margin-bottom:16px;text-align:center;">' +
-      '📱 安装到桌面</h3>' +
-      '<div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:16px;' +
-      'background:var(--green-pale);border-radius:12px;">' +
-      '<div style="flex-shrink:0;width:40px;height:40px;background:var(--green-primary);' +
+      '<button style="position:absolute;top:16px;right:16px;width:32px;height:32px;' +
+      'border-radius:50%;border:none;background:var(--gray-100);color:var(--gray-500);' +
+      'display:flex;align-items:center;justify-content:center;cursor:pointer;' +
+      'font-size:18px;line-height:1;padding:0;font-family:inherit;' +
+      'transition:all var(--ease-out);"' +
+      'onclick="this.closest(\'#ios-install-guide\').remove()"' +
+      'aria-label="关闭">✕</button>' +
+
+      // 标题
+      '<h3 style="font-size:18px;font-weight:700;color:var(--gray-900);margin-bottom:20px;' +
+      'text-align:center;padding-right:32px;">📱 添加到主屏幕</h3>' +
+
+      // 步骤 1
+      '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding:14px 16px;' +
+      'background:var(--green-pale);border-radius:12px;border:1px solid var(--green-light);">' +
+      '<div style="flex-shrink:0;width:36px;height:36px;background:var(--green-primary);' +
       'border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;' +
-      'font-size:18px;font-weight:700;">1</div>' +
-      '<div style="font-size:14px;color:var(--gray-700);line-height:1.5;">' +
-      '点击 Safari 底部工具栏中间的 <strong>分享按钮</strong></div></div>' +
-      '<div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:16px;' +
-      'background:var(--green-pale);border-radius:12px;">' +
-      '<div style="flex-shrink:0;width:40px;height:40px;background:var(--green-primary);' +
+      'font-size:16px;font-weight:700;line-height:1;">1</div>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:4px;">点击分享按钮</div>' +
+      '<div style="font-size:13px;color:var(--gray-500);line-height:1.5;">' +
+      '点击浏览器底部工具栏中间的 <strong style="color:var(--green-dark);">分享图标</strong>（方框+向上箭头）</div>' +
+      '</div></div>' +
+
+      // 步骤 2
+      '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding:14px 16px;' +
+      'background:var(--green-pale);border-radius:12px;border:1px solid var(--green-light);">' +
+      '<div style="flex-shrink:0;width:36px;height:36px;background:var(--green-primary);' +
       'border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;' +
-      'font-size:18px;font-weight:700;">2</div>' +
-      '<div style="font-size:14px;color:var(--gray-700);line-height:1.5;">' +
-      '向下滑动，找到并点击 <strong>「添加到主屏幕」</strong></div></div>' +
-      '<div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:16px;' +
-      'background:var(--green-pale);border-radius:12px;">' +
-      '<div style="flex-shrink:0;width:40px;height:40px;background:var(--green-primary);' +
+      'font-size:16px;font-weight:700;line-height:1;">2</div>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:4px;">找到添加选项</div>' +
+      '<div style="font-size:13px;color:var(--gray-500);line-height:1.5;">' +
+      '在弹出菜单中向下滑动，找到 <strong style="color:var(--green-dark);">「添加到主屏幕」</strong></div>' +
+      '</div></div>' +
+
+      // 步骤 3
+      '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:24px;padding:14px 16px;' +
+      'background:var(--green-pale);border-radius:12px;border:1px solid var(--green-light);">' +
+      '<div style="flex-shrink:0;width:36px;height:36px;background:var(--green-primary);' +
       'border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;' +
-      'font-size:18px;font-weight:700;">3</div>' +
-      '<div style="font-size:14px;color:var(--gray-700);line-height:1.5;">' +
-      '点击右上角 <strong>「添加」</strong> 即可完成安装</div></div>' +
-      '<button style="width:100%;padding:13px;border-radius:14px;' +
-      'background:var(--green-primary);color:white;font-size:15px;font-weight:600;' +
+      'font-size:16px;font-weight:700;line-height:1;">3</div>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:4px;">确认添加</div>' +
+      '<div style="font-size:13px;color:var(--gray-500);line-height:1.5;">' +
+      '点击右上角 <strong style="color:var(--green-dark);">「添加」</strong>，应用图标将出现在桌面</div>' +
+      '</div></div>' +
+
+      // 提示文字
+      '<div style="text-align:center;font-size:12px;color:var(--gray-400);margin-bottom:16px;' +
+      'line-height:1.6;">添加后可从桌面图标直接打开，享受全屏 App 体验 ✨</div>' +
+
+      // 关闭按钮
+      '<button style="width:100%;padding:14px;border-radius:14px;' +
+      'background:linear-gradient(135deg,var(--green-dark),var(--green-primary));' +
+      'color:white;font-size:15px;font-weight:600;' +
       'border:none;cursor:pointer;font-family:inherit;' +
-      'box-shadow:0 4px 16px rgba(34,197,94,0.3);"' +
-      'onclick="this.closest(\'#ios-install-guide\').remove()">我知道了</button>';
+      'box-shadow:0 4px 20px rgba(34,197,94,0.35);' +
+      'transition:all var(--ease-out);"' +
+      'onclick="this.closest(\'#ios-install-guide\').remove()"' +
+      'onmousedown="this.style.transform=\'scale(0.97)\'"' +
+      'onmouseup="this.style.transform=\'scale(1)\'">我知道了</button>';
 
     overlay.appendChild(sheet);
     overlay.addEventListener('click', function (e) {
       if (e.target === overlay) overlay.remove();
     });
+    // 阻止弹窗内部点击冒泡
+    sheet.addEventListener('click', function (e) {
+      e.stopPropagation();
+    });
     document.body.appendChild(overlay);
+  }
+
+  /**
+   * 通用安装引导弹窗（微信 / UC / QQ / 华为 / 夸克 / 小米等不支持原生 PWA 的浏览器）
+   *
+   * 这些环境没有 beforeinstallprompt，也没有 iOS 的"添加到主屏幕"原生菜单，
+   * 因此引导用户复制链接到系统浏览器（Chrome/Safari）打开后再安装。
+   *
+   * 适配：底部弹出式 Sheet，圆角柔和，支持 Safe Area，带关闭按钮和复制链接功能
+   */
+  function showOtherInstallGuide() {
+    if (document.getElementById('other-install-guide')) return;
+
+    var currentUrl = window.location.href;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'other-install-guide';
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.5);' +
+      'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);' +
+      'display:flex;align-items:flex-end;justify-content:center;' +
+      'padding-bottom:env(safe-area-inset-bottom,20px);';
+
+    var sheet = document.createElement('div');
+    sheet.style.cssText =
+      'background:var(--white);border-radius:20px 20px 0 0;' +
+      'padding:24px 24px 32px;width:100%;max-width:430px;' +
+      'animation:slideUp 0.35s var(--ease-out);position:relative;';
+
+    // 关闭按钮（右上角 ×）
+    sheet.innerHTML =
+      '<button style="position:absolute;top:16px;right:16px;width:32px;height:32px;' +
+      'border-radius:50%;border:none;background:var(--gray-100);color:var(--gray-500);' +
+      'display:flex;align-items:center;justify-content:center;cursor:pointer;' +
+      'font-size:18px;line-height:1;padding:0;font-family:inherit;' +
+      'transition:all var(--ease-out);"' +
+      'onclick="this.closest(\'#other-install-guide\').remove()"' +
+      'aria-label="关闭">✕</button>' +
+
+      // 标题
+      '<h3 style="font-size:18px;font-weight:700;color:var(--gray-900);margin-bottom:20px;' +
+      'text-align:center;padding-right:32px;">📱 添加到桌面</h3>' +
+
+      // 说明文字
+      '<div style="text-align:center;font-size:14px;color:var(--gray-600);margin-bottom:20px;' +
+      'line-height:1.6;padding:0 8px;">' +
+      '当前浏览器不支持直接安装，请用 <strong style="color:var(--green-dark);">系统浏览器</strong> 打开后添加</div>' +
+
+      // 步骤 1
+      '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding:14px 16px;' +
+      'background:var(--green-pale);border-radius:12px;border:1px solid var(--green-light);">' +
+      '<div style="flex-shrink:0;width:36px;height:36px;background:var(--green-primary);' +
+      'border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;' +
+      'font-size:16px;font-weight:700;line-height:1;">1</div>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:4px;">复制链接</div>' +
+      '<div style="font-size:13px;color:var(--gray-500);line-height:1.5;">' +
+      '点击下方按钮复制当前页面链接</div>' +
+      '</div></div>' +
+
+      // 步骤 2
+      '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding:14px 16px;' +
+      'background:var(--green-pale);border-radius:12px;border:1px solid var(--green-light);">' +
+      '<div style="flex-shrink:0;width:36px;height:36px;background:var(--green-primary);' +
+      'border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;' +
+      'font-size:16px;font-weight:700;line-height:1;">2</div>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:4px;">用系统浏览器打开</div>' +
+      '<div style="font-size:13px;color:var(--gray-500);line-height:1.5;">' +
+      '粘贴链接到 <strong style="color:var(--green-dark);">Chrome / Safari</strong> 中打开</div>' +
+      '</div></div>' +
+
+      // 步骤 3
+      '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:24px;padding:14px 16px;' +
+      'background:var(--green-pale);border-radius:12px;border:1px solid var(--green-light);">' +
+      '<div style="flex-shrink:0;width:36px;height:36px;background:var(--green-primary);' +
+      'border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;' +
+      'font-size:16px;font-weight:700;line-height:1;">3</div>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:4px;">添加到桌面</div>' +
+      '<div style="font-size:13px;color:var(--gray-500);line-height:1.5;">' +
+      '在系统浏览器中找到 <strong style="color:var(--green-dark);">「添加到桌面」/「添加到主屏幕」</strong> 按钮</div>' +
+      '</div></div>' +
+
+      // 提示文字
+      '<div style="text-align:center;font-size:12px;color:var(--gray-400);margin-bottom:16px;' +
+      'line-height:1.6;">添加后可从桌面图标直接打开，享受全屏 App 体验 ✨</div>' +
+
+      // 复制链接按钮
+      '<button id="copy-link-btn" style="width:100%;padding:14px;border-radius:14px;' +
+      'background:var(--white);color:var(--green-primary);font-size:15px;font-weight:600;' +
+      'border:2px solid var(--green-primary);cursor:pointer;font-family:inherit;' +
+      'transition:all var(--ease-out);margin-bottom:12px;"' +
+      'onmousedown="this.style.transform=\'scale(0.97)\'"' +
+      'onmouseup="this.style.transform=\'scale(1)\'">' +
+      '📋 复制链接</button>' +
+
+      // 我知道了按钮
+      '<button style="width:100%;padding:14px;border-radius:14px;' +
+      'background:linear-gradient(135deg,var(--green-dark),var(--green-primary));' +
+      'color:white;font-size:15px;font-weight:600;' +
+      'border:none;cursor:pointer;font-family:inherit;' +
+      'box-shadow:0 4px 20px rgba(34,197,94,0.35);' +
+      'transition:all var(--ease-out);"' +
+      'onclick="this.closest(\'#other-install-guide\').remove()"' +
+      'onmousedown="this.style.transform=\'scale(0.97)\'"' +
+      'onmouseup="this.style.transform=\'scale(1)\'">我知道了</button>';
+
+    overlay.appendChild(sheet);
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) overlay.remove();
+    });
+    sheet.addEventListener('click', function (e) {
+      e.stopPropagation();
+    });
+    document.body.appendChild(overlay);
+
+    // 绑定复制链接按钮事件
+    var copyBtn = document.getElementById('copy-link-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function () {
+        copyToClipboard(currentUrl);
+      });
+    }
+  }
+
+  /**
+   * 复制文本到剪贴板（兼容各平台）
+   */
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        showToast('链接已复制，请粘贴到系统浏览器中打开');
+      }).catch(function () {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  /**
+   * 降级复制方案（使用 textarea）
+   */
+  function fallbackCopy(text) {
+    var textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      showToast('链接已复制，请粘贴到系统浏览器中打开');
+    } catch (err) {
+      showToast('复制失败，请手动复制链接');
+    }
+    document.body.removeChild(textarea);
   }
 
   /**
@@ -1313,34 +1611,62 @@ body {
     if (e.matches) hideInstallButton();
   });
 
-  // ---- 页面加载完成后延迟检查安装状态 ----
-  // 如果已安装，隐藏按钮
-  // 如果未安装，延迟 3 秒后尝试显示（兜底：部分环境 beforeinstallprompt 触发较晚）
-  if (isPWAInstalled()) {
-    hideInstallButton();
-  } else {
+  // ---- 页面加载完成后按平台初始化安装按钮 ----
+  (function initInstallButton() {
+    // 已安装 → 隐藏
+    if (isPWAInstalled()) {
+      hideInstallButton();
+      return;
+    }
+
+    var platform = detectPlatform();
+
+    // iOS 全浏览器 → 延迟后显示（beforeinstallprompt 不会触发）
+    if (platform === 'ios') {
+      // 先更新按钮文案为"添加到主屏幕"
+      updateInstallButtonLabel();
+      // 延迟 1.5 秒后显示，给页面渲染留时间
+      setTimeout(function () {
+        if (!isPWAInstalled()) {
+          showInstallButton();
+        }
+      }, 1500);
+      return;
+    }
+
+    // 微信/UC/QQ 等 → 显示「添加到桌面」按钮，点击弹出引导
+    if (platform === 'other') {
+      updateInstallButtonLabel();
+      setTimeout(function () {
+        if (!isPWAInstalled()) {
+          showInstallButton();
+        }
+      }, 1500);
+      return;
+    }
+
+    // chrome 平台 → 等待 beforeinstallprompt 事件触发后显示
+    // 如果 5 秒后仍未触发（罕见情况，如桌面端未满足可安装条件），则隐藏
     setTimeout(function () {
-      // 3 秒后如果 beforeinstallprompt 已触发或检测为 iOS Safari，显示按钮
-      if (isPWAInstallable()) {
-        showInstallButton();
+      if (!_installPrompt) {
+        // beforeinstallprompt 未触发 = 当前不满足安装条件（如域名非 HTTPS、已安装、频率限制等）
+        hideInstallButton();
       }
-    }, 3000);
-  }
+    }, 5000);
+  })();
 })();
 
 /* ============================================================
    2. 常量 & 配置
    ============================================================ */
 var STORAGE_KEY = 'serene_logic_v2';
-var APP_VERSION = 'serene-today-v1';
+var APP_VERSION = 'serene-today-v2';
 
 // 公告内容
 var ANNOUNCEMENT_CONTENT = [
   { icon: '📱', text: 'PWA 离线安装 — 添加到手机/电脑桌面，随时打开使用，断网也能正常访问' },
-  { icon: '👈', text: '左滑删除 — 左滑任务卡片即可快速删除，配合弹性动画流畅自然' },
   { icon: '📂', text: '数据导入导出 — 一键导出/导入 JSON 文件，轻松跨设备同步任务数据' },
-  { icon: '✅', text: '任务完成高亮 — 完成任务后卡片变为绿色高亮，进度清晰可见' },
-  { icon: '📊', text: '行为记录统计 — 连续打卡、热力图、分类图表，可视化你的每日习惯' }
+  { icon: '✅', text: '任务完成高亮 — 完成任务后卡片变为绿色高亮，进度清晰可见' }
 ];
 
 // 鼓励语
