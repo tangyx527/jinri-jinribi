@@ -131,6 +131,43 @@ var CACHE_VERSION = 'serene-today-v2'; // 修改此处
 
 ---
 
+## 🔍 PWA 安装排查指南
+
+如果安装弹窗未出现，打开浏览器开发者工具（F12）→ Console 面板，根据日志输出逐项排查：
+
+### 3 步快速排查法
+
+| 步骤 | 检查项 | 控制台预期输出 | 不达标常见原因 |
+|---|---|---|---|
+| **1** | 安全上下文 | `✅ 安全上下文 \| https: 符合要求` | 未使用 HTTPS 或 localhost |
+| **2** | manifest 加载 | `✅ manifest 必填字段 \| name=...` | manifest.json 404、字段缺失、图标尺寸不达标 |
+| **3** | SW 注册 & 激活 | `✅ SW 注册成功 \| scope=... 状态=active` | SW 文件路径错误、注册失败、未激活 |
+| **4** | 安装事件 | `✅ 安装事件已捕获 \| beforeinstallprompt 已触发` | 前面任一步不达标均会导致此事件不触发 |
+
+### 常见不达标原因对照表
+
+| 症状 | 控制台日志特征 | 解决方案 |
+|---|---|---|
+| manifest 文件 404 | `❌ manifest 文件加载 \| HTTP 404` | 检查 manifest.json 是否部署到正确路径 |
+| 必填字段缺失 | `❌ manifest 必填字段 \| 缺少 name` | 补齐 name/short_name/start_url/icons/display 字段 |
+| SW 注册失败 | `❌ SW 注册失败` | 检查 service-worker.js 路径，确认 HTTPS 环境 |
+| 非 HTTPS 环境 | `❌ 安全上下文 \| 当前非 HTTPS` | 部署到 HTTPS 服务器，或本地使用 localhost |
+| 5秒内未触发 | `❌ 安装事件未捕获` | 逐项检查前3步，全部达标后浏览器会触发 |
+| 图标路径错误 | manifest 图标不显示 | 确保 icons 目录下 PNG 尺寸准确（192×192、512×512） |
+| 重复安装 | display-mode 检测失效 | 检查 `isPwaInstalled()` 是否正确返回 true |
+
+### Chromium PWA 可安装硬性标准
+
+浏览器判定可安装需 **全部满足** 以下条件：
+
+1. ✅ **HTTPS 或 localhost** — 页面必须通过安全上下文提供
+2. ✅ **有效的 manifest.json** — 必须包含 `name`/`short_name`、`start_url`、`display: standalone`、`192×192` 和 `512×512` 两个 PNG 图标
+3. ✅ **已注册且激活的 Service Worker** — 必须监听 `fetch` 事件并提供离线响应能力
+4. ✅ **用户未重复安装** — 同一应用不能重复安装
+5. ✅ **用户有足够的交互** — 浏览器可能要求用户在页面上有一定交互（非自动弹窗前提，但影响触发时机）
+
+---
+
 ## 📄 License
 
 MIT © 2024

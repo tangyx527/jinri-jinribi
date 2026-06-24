@@ -479,6 +479,19 @@ body {
 /* ============================================================
    15. PROFILE SCREEN — 统计 & 图表
    ============================================================ */
+/* PWA 安装按钮 */
+.pwa-install-row { display: flex; padding: 0 16px; margin-bottom: 4px; }
+.pwa-install-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px 0; border-radius: var(--radius); font-size: 15px; font-weight: 600;
+  font-family: inherit; cursor: pointer; user-select: none;
+  border: none; background: linear-gradient(135deg, var(--green-dark), var(--green-primary));
+  color: var(--white); box-shadow: 0 4px 16px rgba(34,197,94,0.35);
+  transition: all var(--ease-out);
+}
+.pwa-install-btn:active { transform: scale(0.96); opacity: 0.9; }
+.pwa-install-btn.hidden { display: none; }
+
 /* 导入导出按钮行 */
 .import-export-row { display: flex; gap: 10px; padding: 0 16px; margin-bottom: 4px; }
 .import-export-row button {
@@ -836,6 +849,14 @@ body {
       <p class="subtitle">了解自己的行为模式</p>
     </header>
 
+    <!-- PWA 安装按钮（仅在安装事件捕获后显示，已安装自动隐藏） -->
+    <div class="pwa-install-row">
+      <button class="pwa-install-btn hidden" id="pwa-install-btn" onclick="triggerInstallPrompt()" title="安装到桌面，断网也能用">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>📲 安装到桌面</span>
+      </button>
+    </div>
+
     <div class="import-export-row">
       <button class="btn-export" onclick="exportData()" title="导出数据为JSON文件">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1024,18 +1045,99 @@ body {
 
 <script>
 /* ============================================================
-   1. SERVICE WORKER 注册 & 更新检测
+   1. SERVICE WORKER 注册 & 更新检测 + 全链路 PWA 调试日志
    ============================================================ */
-(function registerSW() {
-  if (!('serviceWorker' in navigator)) return;
+var _swUpdated = false;
+var _swRegistration = null;
 
-  var _swUpdated = false;
-  var _swRegistration = null;
+/**
+ * 调试日志工具：统一格式输出 PWA 各链路状态
+ */
+function pwaLog(label, status, detail) {
+  var icon = status === 'OK' ? '✅' : status === 'WAIT' ? '⏳' : status === 'ERR' ? '❌' : 'ℹ️';
+  var msg = '[PWA] ' + icon + ' ' + label;
+  if (detail !== undefined) msg += ' | ' + detail;
+  console.log(msg);
+}
+
+/**
+ * 检测当前是否处于 PWA 已安装模式
+ */
+function isPwaInstalled() {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+         window.matchMedia('(display-mode: fullscreen)').matches ||
+         (typeof navigator.standalone !== 'undefined' && navigator.standalone);
+}
+
+/**
+ * 检测 manifest 是否可正常加载
+ */
+function checkManifest() {
+  var link = document.querySelector('link[rel="manifest"]');
+  if (!link) {
+    pwaLog('manifest <link> 标签', 'ERR', '页面缺少 <link rel="manifest"> 标签');
+    return;
+  }
+  pwaLog('manifest <link> 标签', 'OK', 'href=' + link.getAttribute('href'));
+
+  // 尝试 fetch manifest 验证其可访问性
+  var manifestUrl = link.getAttribute('href');
+  fetch(manifestUrl)
+    .then(function (res) {
+      if (!res.ok) {
+        pwaLog('manifest 文件加载', 'ERR', 'HTTP ' + res.status + ' → ' + manifestUrl);
+        return;
+      }
+      return res.json().then(function (json) {
+        // 逐项核查必填字段
+        var checks = [];
+        if (!json.name) checks.push('缺少 name');
+        if (!json.short_name) checks.push('缺少 short_name');
+        if (!json.start_url) checks.push('缺少 start_url');
+        if (json.display !== 'standalone') checks.push('display≠standalone (当前:' + json.display + ')');
+        if (!json.icons || json.icons.length < 2) checks.push('icons 数量不足 (需≥2，当前:' + (json.icons ? json.icons.length : 0) + ')');
+
+        if (checks.length > 0) {
+          pwaLog('manifest 必填字段', 'ERR', checks.join(', '));
+        } else {
+          pwaLog('manifest 必填字段', 'OK',
+            'name=' + json.name + ' short_name=' + json.short_name +
+            ' display=' + json.display + ' icons=' + (json.icons ? json.icons.length : 0) + '个');
+        }
+
+        // 验证图标尺寸
+        if (json.icons) {
+          var sizes = [];
+          json.icons.forEach(function (icon) {
+            var src = icon.src || '';
+            sizes.push((icon.sizes || '?') + '→' + src);
+          });
+          pwaLog('manifest 图标', 'OK', sizes.join(' | '));
+        }
+      });
+    })
+    .catch(function (err) {
+      pwaLog('manifest 文件加载', 'ERR', 'fetch失败: ' + err.message + ' → ' + manifestUrl);
+    });
+}
+
+(function registerSW() {
+  if (!('serviceWorker' in navigator)) {
+    pwaLog('Service Worker API', 'ERR', '浏览器不支持 serviceWorker，无法安装 PWA');
+    return;
+  }
+  pwaLog('Service Worker API', 'OK', '浏览器支持');
 
   // ★ 立即注册 SW（不等待 load），确保 beforeinstallprompt 触发前 SW 已就绪
+  pwaLog('SW 注册中', 'WAIT', '注册路径: ./service-worker.js, scope: ./');
   navigator.serviceWorker.register('./service-worker.js', { scope: './' })
     .then(function (reg) {
       _swRegistration = reg;
+
+      // 状态输出
+      var swState = reg.installing ? 'installing' : reg.waiting ? 'waiting' : reg.active ? 'active' : 'unknown';
+      pwaLog('SW 注册成功', 'OK', 'scope=' + reg.scope + ' 状态=' + swState +
+            ' 是否接管页面=' + (!!navigator.serviceWorker.controller));
 
       if (reg.active && navigator.serviceWorker.controller) {
         reg.active.postMessage('GET_VERSION');
@@ -1044,15 +1146,19 @@ body {
       reg.addEventListener('updatefound', function () {
         var newWorker = reg.installing;
         if (!newWorker) return;
+        pwaLog('SW 发现更新', 'WAIT', '新版本安装中...');
         newWorker.addEventListener('statechange', function () {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
             _swUpdated = true;
+            pwaLog('SW 新版本就绪', 'OK', '等待页面刷新以激活');
             showUpdateBanner();
           }
         });
       });
     })
-    .catch(function () {});
+    .catch(function (err) {
+      pwaLog('SW 注册失败', 'ERR', err.message + ' — 请检查 service-worker.js 路径和 HTTPS');
+    });
 
   // 定期检查更新
   setInterval(function () {
@@ -1090,25 +1196,92 @@ body {
   };
 })();
 
-// ---- PWA 安装弹窗（所有浏览器） ----
+// ---- PWA 安装弹窗（严格对齐 Chromium 可安装标准） ----
 (function () {
-  // 已安装则不处理
-  if (window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: fullscreen)').matches ||
-      navigator.standalone) {
+  // 检查安全上下文（必须是 HTTPS 或 localhost）
+  var isSecure = window.isSecureContext;
+  if (!isSecure) {
+    pwaLog('安全上下文', 'ERR', '当前非 HTTPS 环境，PWA 安装要求 HTTPS 或 localhost');
     return;
   }
+  pwaLog('安全上下文', 'OK', window.location.protocol + ' 符合要求');
 
-  // ★ 不调用 preventDefault()，让浏览器自行弹出原生安装提示
-  // 监听事件仅用于日志/统计目的
+  // 检查是否已安装
+  if (isPwaInstalled()) {
+    pwaLog('安装状态', 'OK', '应用已安装 (display-mode: standalone/fullscreen)，跳过安装流程');
+    return;
+  }
+  pwaLog('安装状态', 'WAIT', '尚未安装，等待 beforeinstallprompt 事件...');
+
+  // ★ 核心：保存 beforeinstallprompt 事件对象，供用户手势触发
+  var _deferredPrompt = null;
+  var _installBtn = document.getElementById('pwa-install-btn');
+
   window.addEventListener('beforeinstallprompt', function (e) {
-    // 什么都不做，浏览器会自动弹出安装 UI
-    console.log('[PWA] beforeinstallprompt 已触发，浏览器将显示安装提示');
+    // ★ 阻止浏览器自动弹出安装提示
+    e.preventDefault();
+    // ★ 保存事件对象
+    _deferredPrompt = e;
+
+    pwaLog('安装事件已捕获', 'OK',
+      'beforeinstallprompt 已触发, platforms=' + (e.platforms ? e.platforms.join(',') : 'N/A') +
+      ' 安装按钮将显示在「统计」页面');
+
+    // 显示安装按钮
+    if (_installBtn) {
+      _installBtn.classList.remove('hidden');
+    }
   });
 
-  // 安装成功回调
+  // 如果 beforeinstallprompt 始终未触发，输出排查提示
+  setTimeout(function () {
+    if (!_deferredPrompt && !isPwaInstalled()) {
+      pwaLog('安装事件未捕获', 'ERR',
+        'beforeinstallprompt 在页面加载后 5 秒内未触发，可能原因：' +
+        '① SW 未注册/未激活 ② manifest 缺失或 404 ③ 图标尺寸不达标 ④ 非 HTTPS ⑤ 已安装过但未检测到 ⑥ 浏览器不支持');
+      // 仍然显示按钮（部分浏览器可能支持手动触发或提示用户使用浏览器菜单安装）
+      if (_installBtn) {
+        _installBtn.classList.remove('hidden');
+        _installBtn.querySelector('span').textContent = '📲 安装到桌面（手动）';
+      }
+    }
+  }, 5000);
+
+  // ★ 用户手势触发安装弹窗
+  window.triggerInstallPrompt = function () {
+    if (!_deferredPrompt) {
+      // 未捕获到事件时的降级提示
+      showToast('请使用浏览器菜单中的"添加到主屏幕"功能安装');
+      pwaLog('安装操作', 'ERR', 'deferredPrompt 不可用，引导用户使用浏览器菜单安装');
+      return;
+    }
+
+    pwaLog('安装操作', 'WAIT', '用户点击安装按钮，调用 prompt()...');
+    _deferredPrompt.prompt();
+
+    _deferredPrompt.userChoice.then(function (choiceResult) {
+      if (choiceResult.outcome === 'accepted') {
+        pwaLog('安装结果', 'OK', '用户接受了安装');
+      } else {
+        pwaLog('安装结果', 'INFO', '用户取消了安装 (outcome=' + choiceResult.outcome + ')');
+      }
+      // 清除保存的事件（一次性使用）
+      _deferredPrompt = null;
+      // 隐藏安装按钮
+      if (_installBtn) {
+        _installBtn.classList.add('hidden');
+      }
+    });
+  };
+
+  // ★ 监听安装成功事件
   window.addEventListener('appinstalled', function () {
-    console.log('[PWA] 应用已安装');
+    pwaLog('应用已安装', 'OK', 'appinstalled 事件触发，隐藏安装按钮');
+    _deferredPrompt = null;
+    if (_installBtn) {
+      _installBtn.classList.add('hidden');
+    }
+    showToast('应用已安装到桌面 🎉');
   });
 })();
 
@@ -2168,6 +2341,7 @@ setTodayDate();
 renderHome();
 initSwipeCards();
 checkAutoAnnouncement();
+checkManifest();  // PWA 全链路调试：检查 manifest 加载状态
 
 // 跨日检测
 var lastDate = localStorage.getItem('serene_last_date');
