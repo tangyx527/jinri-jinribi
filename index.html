@@ -1,0 +1,2114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#22c55e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="今日事">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>今日事今日毕</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== CSS RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f3fcef;
+  color: #1a2e1a;
+  min-height: 100dvh;
+  max-width: 430px;
+  margin: 0 auto;
+  position: relative;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== DESIGN TOKENS ===== */
+:root {
+  --green-primary: #22c55e;
+  --green-light: #86efac;
+  --green-pale: #dcfce7;
+  --green-dark: #16a34a;
+  --surface: #f3fcef;
+  --white: #ffffff;
+  --gray-50: #f9fafb;
+  --gray-100: #f0f9ee;
+  --gray-200: #e2f0df;
+  --gray-300: #c5d9c2;
+  --gray-400: #9bb898;
+  --gray-500: #6b8e68;
+  --gray-600: #4a6b47;
+  --gray-700: #2e4a2c;
+  --gray-900: #1a2e1a;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 24px;
+  --shadow: 0 2px 16px rgba(34,197,94,0.08);
+  --shadow-md: 0 4px 24px rgba(34,197,94,0.12);
+  --transition: 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ===== LAYOUT ===== */
+#app { min-height: 100dvh; display: flex; flex-direction: column; }
+.screen { display: none; flex: 1; flex-direction: column; padding-bottom: 80px; }
+.screen.active { display: flex; }
+
+/* ===== TOP HEADER ===== */
+.top-header {
+  padding: 52px 24px 20px;
+  background: var(--surface);
+}
+.top-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gray-900);
+  letter-spacing: -0.5px;
+}
+.top-header .subtitle {
+  font-size: 14px;
+  color: var(--gray-500);
+  margin-top: 2px;
+}
+.top-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.clear-records-btn {
+  font-size: 13px;
+  color: #ef4444;
+  background: #fff0f0;
+  border: 1px solid #fecaca;
+  border-radius: 20px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.clear-records-btn:active { background: #fee2e2; }
+
+/* Confirm overlay */
+.confirm-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 300; padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.confirm-sheet {
+  background: #fff; border-radius: 20px 20px 0 0;
+  padding: 28px 24px 32px; width: 100%; max-width: 430px;
+  animation: slideUp 0.25s ease;
+}
+.confirm-sheet h3 { font-size: 18px; font-weight: 700; color: #111; margin-bottom: 8px; }
+.confirm-sheet p { font-size: 14px; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }
+.confirm-actions { display: flex; gap: 12px; }
+.confirm-cancel {
+  flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 600;
+  background: #f3f4f6; color: #374151; border: none; cursor: pointer;
+}
+.confirm-delete {
+  flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 600;
+  background: #ef4444; color: #fff; border: none; cursor: pointer;
+}
+
+/* ===== BOTTOM NAV ===== */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--gray-200);
+  display: flex;
+  height: 72px;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  padding: 8px 0;
+}
+.nav-item svg { transition: var(--transition); }
+.nav-item span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gray-400);
+  transition: color var(--transition);
+}
+.nav-item.active span { color: var(--green-primary); }
+.nav-item.active svg { color: var(--green-primary); }
+.nav-item:active { transform: scale(0.93); }
+
+/* ===== HOME SCREEN ===== */
+.home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px 24px;
+}
+
+/* Progress Ring */
+.ring-container {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin-bottom: 20px;
+}
+.ring-svg { transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: var(--gray-200); stroke-width: 10; }
+.ring-progress {
+  fill: none;
+  stroke: var(--green-primary);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 565.48;
+  stroke-dashoffset: 565.48;
+  transition: stroke-dashoffset 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ring-glow {
+  fill: none;
+  stroke: var(--green-pale);
+  stroke-width: 18;
+  stroke-linecap: round;
+  stroke-dasharray: 565.48;
+  stroke-dashoffset: 565.48;
+  opacity: 0;
+  transition: stroke-dashoffset 600ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 300ms;
+}
+.ring-center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+.ring-percent {
+  font-size: 42px;
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.ring-label {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin-top: 4px;
+  font-weight: 400;
+}
+.ring-status {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--green-dark);
+  text-align: center;
+  min-height: 22px;
+}
+
+/* Date badge */
+.date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--gray-600);
+  font-weight: 500;
+  margin-bottom: 24px;
+}
+
+/* Task section */
+.task-section { padding: 0 16px 16px; }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 12px;
+}
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+.filter-tabs {
+  display: flex;
+  gap: 6px;
+}
+.filter-tab {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--gray-200);
+  background: transparent;
+  color: var(--gray-500);
+  transition: var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-tab.active {
+  background: var(--green-primary);
+  border-color: var(--green-primary);
+  color: white;
+}
+
+/* Task Card */
+.task-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* ===== Swipe-to-Fly-Away ===== */
+.swipe-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  transition: max-height 180ms cubic-bezier(0.2, 0, 0.1, 1),
+              margin-bottom 180ms cubic-bezier(0.2, 0, 0.1, 1),
+              opacity 180ms linear;
+}
+.swipe-container.collapsing {
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  transform: scale(0.98);
+}
+.swipe-delete-hint {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 80px;
+  background: #ef4444;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600;
+  border-radius: var(--radius);
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.swipe-inner {
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y;
+  will-change: transform;
+}
+.swipe-inner.flying {
+  will-change: transform, opacity;
+  transition: transform 220ms cubic-bezier(0.2, 0, 0.1, 1),
+              opacity 220ms linear;
+  transform: translateX(-120%) scale(0.95) rotate(-5deg);
+  opacity: 0;
+  pointer-events: none;
+}
+.swipe-inner.rebounding {
+  transition: transform 200ms cubic-bezier(0.25, 1, 0.5, 1);
+  transform: translateX(0);
+}
+
+.task-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--gray-200);
+  transition: all var(--transition);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  animation: slideIn 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.task-card:active { transform: scale(0.97); transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1); }
+.task-card.completed { opacity: 0.7; }
+.task-card.completed .task-title { text-decoration: line-through; color: var(--gray-400); }
+
+.task-check {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--gray-300);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: transparent;
+}
+.task-card.completed .task-check {
+  background: var(--green-primary);
+  border-color: var(--green-primary);
+}
+.task-check svg { opacity: 0; transform: scale(0.5); transition: all 200ms cubic-bezier(0.34,1.56,0.64,1); }
+.task-card.completed .task-check svg { opacity: 1; transform: scale(1); }
+
+.task-content { flex: 1; min-width: 0; }
+.task-title { font-size: 15px; font-weight: 500; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-meta { display: flex; gap: 6px; margin-top: 4px; }
+.task-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.2px;
+}
+.tag-work { background: #fef3c7; color: #92400e; }
+.tag-life { background: #ede9fe; color: #5b21b6; }
+.tag-urgent { background: #fee2e2; color: #991b1b; }
+.tag-routine { background: var(--gray-100); color: var(--gray-600); }
+
+/* Add Task Button - below ring, pill shape */
+.add-task-fab {
+  padding: 12px 40px;
+  background: var(--green-primary);
+  border-radius: 24px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(34,197,94,0.4);
+  cursor: pointer;
+  transition: all var(--transition);
+  border: none;
+  -webkit-tap-highlight-color: transparent;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  font-family: inherit;
+}
+/* Unified click feedback */
+button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
+.streak-badge:active, .month-nav:active, .clear-records-btn:active {
+  transform: scale(0.97);
+  transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.add-task-fab:active { transform: scale(0.97); transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  text-align: center;
+  gap: 8px;
+}
+.empty-state svg { color: var(--gray-300); margin-bottom: 8px; }
+.empty-state h3 { font-size: 16px; font-weight: 600; color: var(--gray-500); }
+.empty-state p { font-size: 14px; color: var(--gray-400); line-height: 1.5; }
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal-sheet {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  background: var(--white);
+  border-radius: 24px 24px 0 0;
+  padding: 0 24px 40px;
+  transform: translateY(100%);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-overlay.open .modal-sheet { transform: translateY(0); }
+.modal-handle {
+  width: 36px; height: 4px;
+  background: var(--gray-200);
+  border-radius: 2px;
+  margin: 12px auto 20px;
+}
+.modal-title { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-label { font-size: 13px; font-weight: 600; color: var(--gray-600); margin-bottom: 6px; display: block; }
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--gray-900);
+  background: var(--gray-50);
+  outline: none;
+  transition: border-color var(--transition);
+  -webkit-appearance: none;
+}
+.form-input:focus { border-color: var(--green-primary); background: white; }
+.radio-group { display: flex; gap: 8px; }
+.radio-btn {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--gray-200);
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.radio-btn.selected.work { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.radio-btn.selected.life { background: #ede9fe; border-color: #8b5cf6; color: #5b21b6; }
+.radio-btn.selected.urgent { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+.radio-btn.selected.routine { background: var(--green-pale); border-color: var(--green-primary); color: var(--green-dark); }
+
+.btn-primary {
+  width: 100%;
+  padding: 15px;
+  background: var(--green-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition);
+  margin-top: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-primary:active { transform: scale(0.98); background: var(--green-dark); }
+
+/* ===== TOAST ===== */
+.toast {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: var(--gray-900);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 999;
+  white-space: nowrap;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Celebration */
+.celebration-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  border: 3px solid var(--green-primary);
+  opacity: 0;
+  pointer-events: none;
+}
+@keyframes celebrate {
+  0% { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
+}
+
+/* ===== LOG SCREEN ===== */
+.log-screen { padding-bottom: 90px; }
+.streak-banner {
+  margin: 0 16px 20px;
+  background: linear-gradient(135deg, #16a34a, #22c55e);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: white;
+}
+.streak-fire { font-size: 36px; }
+.streak-num { font-size: 40px; font-weight: 800; line-height: 1; }
+.streak-label { font-size: 14px; opacity: 0.9; font-weight: 500; }
+
+.heatmap-section { padding: 0 16px 20px; }
+.heatmap-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: 12px;
+}
+.month-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.month-nav {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: var(--transition);
+  color: var(--gray-600);
+}
+.month-nav:active { background: var(--gray-100); }
+.month-name { font-size: 16px; font-weight: 600; color: var(--gray-800); }
+
+.heatmap-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin-bottom: 4px;
+}
+.weekday-label {
+  text-align: center;
+  font-size: 11px;
+  color: var(--gray-400);
+  font-weight: 500;
+  padding: 2px 0;
+}
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  background: var(--gray-100);
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.heatmap-cell.empty { background: transparent; cursor: default; }
+.heatmap-cell.today { outline: 2px solid var(--green-primary); }
+.heatmap-cell.level-1 { background: #bbf7d0; }
+.heatmap-cell.level-2 { background: #86efac; }
+.heatmap-cell.level-3 { background: #4ade80; }
+.heatmap-cell.level-4 { background: #22c55e; }
+.heatmap-cell.future { background: transparent; cursor: default; }
+.heatmap-cell:not(.empty):not(.future):active { transform: scale(0.88); }
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.legend-cell { width: 12px; height: 12px; border-radius: 3px; }
+.legend-label { font-size: 11px; color: var(--gray-400); }
+
+/* Day detail modal */
+.day-detail-content { max-height: 50vh; overflow-y: auto; }
+.detail-task-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.detail-task-item:last-child { border-bottom: none; }
+.detail-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green-primary);
+  flex-shrink: 0;
+}
+.detail-task-name { font-size: 14px; color: var(--gray-700); }
+.no-data { text-align: center; color: var(--gray-400); font-size: 14px; padding: 24px 0; }
+
+/* ===== PROFILE SCREEN ===== */
+.profile-screen { padding-bottom: 90px; }
+.stats-grid { padding: 0 16px; display: flex; flex-direction: column; gap: 12px; }
+.stat-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow);
+}
+.stat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.stat-card-title { font-size: 14px; font-weight: 600; color: var(--gray-600); }
+.stat-card-icon { color: var(--green-primary); }
+.streak-display {
+  text-align: center;
+  padding: 16px 0 8px;
+}
+.streak-big { font-size: 72px; font-weight: 800; color: var(--green-primary); line-height: 1; }
+.streak-sub { font-size: 14px; color: var(--gray-500); margin-top: 6px; }
+
+/* Charts */
+.chart-container { position: relative; }
+.donut-container { display: flex; align-items: center; gap: 20px; }
+.donut-svg { flex-shrink: 0; }
+.donut-legend { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.legend-item { display: flex; align-items: center; gap: 8px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-info { flex: 1; }
+.legend-name { font-size: 13px; color: var(--gray-700); font-weight: 500; }
+.legend-pct { font-size: 12px; color: var(--gray-400); }
+
+/* Bar chart */
+.bar-chart { display: flex; flex-direction: column; gap: 10px; }
+.bar-row { display: flex; align-items: center; gap: 10px; }
+.bar-label { font-size: 12px; color: var(--gray-500); width: 55px; text-align: right; flex-shrink: 0; }
+.bar-track { flex: 1; height: 10px; background: var(--gray-100); border-radius: 5px; overflow: hidden; }
+.bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--green-primary);
+  transition: width 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.bar-fill.secondary { background: var(--gray-300); }
+.bar-val { font-size: 12px; color: var(--gray-500); width: 28px; text-align: right; flex-shrink: 0; }
+
+/* Weekly trend chart */
+.weekly-trend-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.weekly-trend-svg { display: block; min-width: 320px; }
+
+/* Line chart */
+.line-chart-wrap { overflow-x: auto; }
+.line-chart-svg { display: block; }
+
+/* Stats summary */
+.stats-row { display: flex; gap: 10px; }
+.mini-stat {
+  flex: 1;
+  background: var(--gray-100);
+  border-radius: var(--radius);
+  padding: 14px 12px;
+  text-align: center;
+}
+.mini-stat-num { font-size: 24px; font-weight: 700; color: var(--green-dark); line-height: 1; }
+.mini-stat-label { font-size: 11px; color: var(--gray-500); margin-top: 4px; }
+
+/* Stats action buttons (import/export) */
+.stats-actions {
+  display: flex;
+  gap: 12px;
+}
+.stats-action-btn {
+  flex: 1;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+.stats-action-btn--primary {
+  background: var(--green-primary);
+  color: white;
+  box-shadow: 0 2px 12px rgba(34,197,94,0.25);
+}
+.stats-action-btn--secondary {
+  background: var(--green-pale);
+  color: var(--green-primary);
+}
+.stats-action-btn--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ===== ANIMATIONS ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+/* Float animation for empty state */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.float-anim { animation: float 3s ease-in-out infinite; }
+
+/* Pulse for streak */
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+}
+.pulse { animation: pulse-green 2s infinite; }
+
+/* Shimmer for loading */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ====== HOME SCREEN ====== -->
+  <div class="screen active" id="screen-home">
+    <div class="top-header">
+      <h1>今日事今日毕</h1>
+      <div class="subtitle">平静，专注，每一天</div>
+    </div>
+
+    <!-- Progress Ring Hero -->
+    <div class="home-hero">
+      <div class="date-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span id="today-date"></span>
+      </div>
+      <div class="ring-container" id="ring-container">
+        <svg class="ring-svg" width="200" height="200" viewBox="0 0 200 200">
+          <circle class="ring-bg" cx="100" cy="100" r="90"/>
+          <circle class="ring-glow" id="ring-glow" cx="100" cy="100" r="90"/>
+          <circle class="ring-progress" id="ring-progress" cx="100" cy="100" r="90"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-percent" id="ring-percent">0%</div>
+          <div class="ring-label">今日完成</div>
+        </div>
+        <div class="celebration-ring" id="celebration-ring"></div>
+      </div>
+      <div class="ring-status" id="ring-status">从今天开始</div>
+      <button class="add-task-fab" id="add-fab" onclick="openAddModal()" aria-label="添加任务">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        添加任务
+      </button>
+    </div>
+
+    <!-- Task Section -->
+    <div class="task-section">
+      <div class="section-header">
+        <span class="section-title">今日任务</span>
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all" onclick="filterTasks(this,'all')">全部</button>
+          <button class="filter-tab" data-filter="work" onclick="filterTasks(this,'work')">工作</button>
+          <button class="filter-tab" data-filter="life" onclick="filterTasks(this,'life')">生活</button>
+        </div>
+      </div>
+      <div class="task-list" id="task-list"></div>
+    </div>
+  </div>
+
+  <!-- ====== LOG SCREEN ====== -->
+  <div class="screen" id="screen-log">
+    <div class="top-header">
+      <div class="top-header-row">
+        <h1>行为记录</h1>
+        <button class="clear-records-btn" onclick="openClearConfirm()">清除记录</button>
+      </div>
+      <div class="subtitle">持续追踪，看见成长</div>
+    </div>
+
+    <!-- Streak Banner -->
+    <div class="streak-banner" id="streak-banner">
+      <div class="streak-fire">🔥</div>
+      <div>
+        <div class="streak-num" id="streak-num">0</div>
+        <div class="streak-label">天连续记录</div>
+      </div>
+      <div style="margin-left:auto; text-align:right;">
+        <div style="font-size:13px; opacity:0.8;">最长记录</div>
+        <div style="font-size:22px; font-weight:700;" id="max-streak-num">0</div>
+        <div style="font-size:12px; opacity:0.8;">天</div>
+      </div>
+    </div>
+
+    <!-- Heatmap -->
+    <div class="heatmap-section">
+      <div class="month-selector">
+        <button class="month-nav" onclick="changeMonth(-1)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span class="month-name" id="month-name"></span>
+        <button class="month-nav" onclick="changeMonth(1)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div class="heatmap-weekdays">
+        <div class="weekday-label">日</div><div class="weekday-label">一</div><div class="weekday-label">二</div>
+        <div class="weekday-label">三</div><div class="weekday-label">四</div><div class="weekday-label">五</div>
+        <div class="weekday-label">六</div>
+      </div>
+      <div class="heatmap-grid" id="heatmap-grid"></div>
+      <div class="heatmap-legend">
+        <span class="legend-label">少</span>
+        <div class="legend-cell" style="background:var(--gray-100)"></div>
+        <div class="legend-cell" style="background:#bbf7d0"></div>
+        <div class="legend-cell" style="background:#86efac"></div>
+        <div class="legend-cell" style="background:#4ade80"></div>
+        <div class="legend-cell" style="background:#22c55e"></div>
+        <span class="legend-label">多</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== PROFILE SCREEN ====== -->
+  <div class="screen" id="screen-profile">
+    <div class="top-header">
+      <h1>我的统计</h1>
+      <div class="subtitle">了解自己的行为模式</div>
+    </div>
+
+    <div class="stats-grid">
+      <!-- Import / Export -->
+      <div class="stats-actions" id="stats-actions">
+        <button class="stats-action-btn stats-action-btn--primary" id="btn-export" onclick="exportData()">导出数据</button>
+        <button class="stats-action-btn stats-action-btn--secondary" id="btn-import" onclick="triggerImport()">导入数据</button>
+      </div>
+
+      <!-- Mini stats row -->
+      <div class="stats-row">
+        <div class="mini-stat">
+          <div class="mini-stat-num" id="stat-total">0</div>
+          <div class="mini-stat-label">总完成任务</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-num" id="stat-today">0</div>
+          <div class="mini-stat-label">今日完成</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-num" id="stat-streak">0</div>
+          <div class="mini-stat-label">当前连续</div>
+        </div>
+      </div>
+
+      <!-- Streak Card -->
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span class="stat-card-title">🔥 连续打卡</span>
+          <span class="stat-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </span>
+        </div>
+        <div class="streak-display">
+          <div class="streak-big pulse" id="streak-big">0</div>
+          <div class="streak-sub">天连续记录</div>
+        </div>
+      </div>
+
+      <!-- Donut Chart -->
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span class="stat-card-title">工作 vs 生活</span>
+        </div>
+        <div class="donut-container">
+          <svg class="donut-svg" width="110" height="110" viewBox="0 0 110 110">
+            <circle cx="55" cy="55" r="40" fill="none" stroke="#f0f9ee" stroke-width="18"/>
+            <circle id="donut-work" cx="55" cy="55" r="40" fill="none" stroke="#f59e0b" stroke-width="18"
+              stroke-dasharray="251.33" stroke-dashoffset="125.66"
+              transform="rotate(-90 55 55)" style="transition: stroke-dashoffset 800ms cubic-bezier(0.34,1.56,0.64,1)"/>
+            <circle id="donut-life" cx="55" cy="55" r="40" fill="none" stroke="#8b5cf6" stroke-width="18"
+              stroke-dasharray="251.33" stroke-dashoffset="251.33"
+              transform="rotate(-90 55 55)" style="transition: stroke-dashoffset 800ms cubic-bezier(0.34,1.56,0.64,1)"/>
+          </svg>
+          <div class="donut-legend">
+            <div class="legend-item">
+              <div class="legend-dot" style="background:#f59e0b"></div>
+              <div class="legend-info">
+                <div class="legend-name">工作</div>
+                <div class="legend-pct" id="work-pct">50%</div>
+              </div>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background:#8b5cf6"></div>
+              <div class="legend-info">
+                <div class="legend-name">生活</div>
+                <div class="legend-pct" id="life-pct">50%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bar Chart: Urgent vs Routine -->
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span class="stat-card-title">紧急 vs 日常</span>
+        </div>
+        <div class="bar-chart" id="bar-chart"></div>
+      </div>
+
+      <!-- Weekly Trend Chart: Last 7 Days Completion Rate -->
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span class="stat-card-title">📈 周完成趋势</span>
+        </div>
+        <div class="weekly-trend-wrap" id="weekly-trend-container">
+          <svg class="weekly-trend-svg" id="weekly-trend" width="100%" height="120" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+      </div>
+
+      <!-- Line Chart: Monthly Trend -->
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span class="stat-card-title">本月完成趋势</span>
+        </div>
+        <div class="line-chart-wrap">
+          <svg class="line-chart-svg" id="line-chart" width="100%" height="160" viewBox="0 0 320 160"></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== BOTTOM NAV ====== -->
+  <nav class="bottom-nav">
+    <div class="nav-item active" onclick="switchScreen('home',this)">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      <span>今日</span>
+    </div>
+    <div class="nav-item" onclick="switchScreen('log',this)">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>
+      </svg>
+      <span>记录</span>
+    </div>
+    <div class="nav-item" onclick="switchScreen('profile',this)">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+      <span>统计</span>
+    </div>
+  </nav>
+
+  <!-- ====== ADD TASK MODAL ====== -->
+  <div class="modal-overlay" id="add-modal" onclick="closeModalOnBg(event)">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">添加新任务</div>
+      <div class="form-group">
+        <label class="form-label">任务内容</label>
+        <input class="form-input" id="task-input" type="text" placeholder="今天要做什么？" maxlength="50">
+      </div>
+      <div class="form-group">
+        <label class="form-label">分类</label>
+        <div class="radio-group">
+          <div class="radio-btn work selected" id="cat-work" onclick="selectCategory('work')">💼 工作</div>
+          <div class="radio-btn life" id="cat-life" onclick="selectCategory('life')">🌿 生活</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">优先级</label>
+        <div class="radio-group">
+          <div class="radio-btn urgent" id="pri-urgent" onclick="selectPriority('urgent')">⚡ 紧急</div>
+          <div class="radio-btn routine selected" id="pri-routine" onclick="selectPriority('routine')">📋 日常</div>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="addTask()">添加任务</button>
+    </div>
+  </div>
+
+  <!-- ====== DAY DETAIL MODAL ====== -->
+  <div class="modal-overlay" id="day-modal" onclick="closeDayModal(event)">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="day-modal-title">任务详情</div>
+      <div class="day-detail-content" id="day-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Clear Records Confirm -->
+  <div class="confirm-overlay" id="clear-confirm-overlay" style="display:none" onclick="if(event.target===this)closeClearConfirm()">
+    <div class="confirm-sheet">
+      <h3>清除所有记录？</h3>
+      <p>这将删除所有历史任务记录、热力图数据和打卡信息，且无法恢复。</p>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" onclick="closeClearConfirm()">取消</button>
+        <button class="confirm-delete" onclick="clearAllRecords()">确认清除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Confirmation Overlay -->
+  <div class="confirm-overlay" id="import-confirm-overlay" style="display:none" onclick="if(event.target===this)closeImportConfirm()">
+    <div class="confirm-sheet">
+      <h3 id="import-confirm-title">导入数据</h3>
+      <p id="import-confirm-desc">确认要导入吗？</p>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" onclick="closeImportConfirm()">取消</button>
+        <button class="confirm-delete" id="import-confirm-btn" style="background:#22c55e">确认导入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file input for import -->
+  <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="handleImportFile(this)">
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ========================================
+   STATE MANAGEMENT
+======================================== */
+const STORAGE_KEY = 'serene_logic_v2';
+let state = {
+  tasks: {},       // { "2026-06-22": [{id, title, category, priority, completed}] }
+  history: {},     // { "2026-06-22": { count, completed } }
+};
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) state = JSON.parse(saved);
+  } catch(e) {}
+  // Seed demo data if first visit
+  if (Object.keys(state.tasks).length === 0) seedDemoData();
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function formatDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+function getTodayTasks() {
+  const key = getTodayKey();
+  if (!state.tasks[key]) state.tasks[key] = [];
+  return state.tasks[key];
+}
+
+function seedDemoData() {
+  const today = new Date();
+  // Seed past 20 days
+  for (let i = 1; i <= 20; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = formatDateKey(d);
+    const count = Math.floor(Math.random() * 5) + 1;
+    const completed = Math.floor(Math.random() * count) + (i < 5 ? count : 0);
+    state.history[key] = { count, completed: Math.min(completed, count) };
+    state.tasks[key] = [];
+    const catArr = ['work','life'];
+    const priArr = ['urgent','routine'];
+    const titles = ['完成季度报告','阅读技术文档','跑步30分钟','整理笔记','项目会议','学习新技能','准备演示','收发邮件'];
+    for (let j = 0; j < count; j++) {
+      state.tasks[key].push({
+        id: `${key}-${j}`,
+        title: titles[Math.floor(Math.random()*titles.length)],
+        category: catArr[Math.floor(Math.random()*2)],
+        priority: priArr[Math.floor(Math.random()*2)],
+        completed: j < state.history[key].completed
+      });
+    }
+  }
+  saveState();
+}
+
+/* ========================================
+   APP STATE
+======================================== */
+let currentScreen = 'home';
+let currentFilter = 'all';
+let addCategory = 'work';
+let addPriority = 'routine';
+let heatmapYear, heatmapMonth;
+
+/* ========================================
+   NAVIGATION
+======================================== */
+function switchScreen(screen, navEl) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`screen-${screen}`).classList.add('active');
+  navEl.classList.add('active');
+  currentScreen = screen;
+
+  if (screen === 'log') renderLog();
+  if (screen === 'profile') renderProfile();
+}
+
+/* ========================================
+   HOME SCREEN
+======================================== */
+function renderHome() {
+  const tasks = getTodayTasks();
+  const total = tasks.length;
+  const done = tasks.filter(t => t.completed).length;
+  const pct = total === 0 ? 0 : Math.round((done/total)*100);
+
+  updateRingDisplay(pct, done, total);
+
+  // Render task list
+  const filtered = currentFilter === 'all' ? tasks : tasks.filter(t => t.category === currentFilter);
+  const list = document.getElementById('task-list');
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="float-anim">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" color="#c5d9c2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/>
+        </svg>
+      </div>
+      <h3>${tasks.length === 0 ? '今天还没有任务' : '该分类暂无任务'}</h3>
+      <p>${tasks.length === 0 ? '点击右下角 + 添加你的第一个任务' : '试试切换其他分类'}</p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map((t, i) => `
+    <div class="swipe-container">
+      <div class="swipe-delete-hint">删除</div>
+      <div class="swipe-inner" data-task-id="${t.id}" style="animation-delay:${i*40}ms">
+        <div class="task-card ${t.completed ? 'completed' : ''}" onclick="if(this.parentNode.dataset.swiping){this.parentNode.dataset.swiping='';return;}toggleTask('${t.id}')">
+          <div class="task-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <div class="task-content">
+            <div class="task-title">${escapeHtml(t.title)}</div>
+            <div class="task-meta">
+              <span class="task-tag tag-${t.category}">${t.category === 'work' ? '工作' : '生活'}</span>
+              <span class="task-tag tag-${t.priority}">${t.priority === 'urgent' ? '紧急' : '日常'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Bind swipe events
+  bindSwipeEvents();
+
+  // Update history for today
+  updateTodayHistory();
+}
+
+function updateRingDisplay(pct, done, total) {
+  const circumference = 565.48;
+  const offset = circumference - (circumference * pct / 100);
+  const ring = document.getElementById('ring-progress');
+  const glow = document.getElementById('ring-glow');
+  if (ring) ring.style.strokeDashoffset = offset;
+  if (glow) {
+    glow.style.strokeDashoffset = offset;
+    glow.style.opacity = pct > 0 ? 0.3 : 0;
+  }
+  const pctEl = document.getElementById('ring-percent');
+  if (pctEl) pctEl.textContent = `${pct}%`;
+
+  const statuses = [
+    [0, '从今天开始'],
+    [1, '迈出第一步'],
+    [25, '慢慢来，很好'],
+    [50, '保持节奏'],
+    [75, '快完成了！'],
+    [100, '全部完成']
+  ];
+  let status = statuses[0][1];
+  for (const [threshold, text] of statuses) {
+    if (pct >= threshold) status = text;
+  }
+  const statusEl = document.getElementById('ring-status');
+  if (statusEl) statusEl.textContent = status;
+
+  if (pct === 100 && total > 0) triggerCelebration();
+}
+
+function updateTodayHistory() {
+  const tasks = getTodayTasks();
+  const key = getTodayKey();
+  if (tasks.length > 0) {
+    state.history[key] = {
+      count: tasks.length,
+      completed: tasks.filter(t => t.completed).length
+    };
+    saveState();
+  }
+}
+
+function toggleTask(id) {
+  const tasks = getTodayTasks();
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  task.completed = !task.completed;
+  if (task.completed) {
+    showToast(randomEncouragement());
+  }
+  saveState();
+  renderHome();
+}
+
+/* ========================================
+   SWIPE-TO-FLY-AWAY  (rAF-optimized)
+======================================== */
+let _flyingCard = null;
+
+function deleteTaskAfterFly(id, container) {
+  const tasks = getTodayTasks();
+  const idx = tasks.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  tasks.splice(idx, 1);
+  saveState();
+
+  // Collapse height with transition
+  container.style.maxHeight = container.offsetHeight + 'px';
+  requestAnimationFrame(() => {
+    container.classList.add('collapsing');
+  });
+
+  // Remove DOM after collapse animation (180ms + buffer)
+  setTimeout(() => {
+    container.remove();
+    const updatedTasks = getTodayTasks();
+    const total = updatedTasks.length;
+    const done = updatedTasks.filter(t => t.completed).length;
+    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+    updateRingDisplay(pct, done, total);
+    updateTodayHistory();
+    showToast('任务已删除');
+  }, 190);
+
+  _flyingCard = null;
+}
+
+function bindSwipeEvents() {
+  var SWIPE_THRESHOLD = 60;
+  var MAX_FOLLOW = 80;
+  var CLICK_THRESHOLD = 10;
+
+  var inners = document.querySelectorAll('.swipe-inner');
+  for (var i = 0; i < inners.length; i++) {
+    (function() {
+      var inner = inners[i];
+      var startX = 0, startY = 0;
+      var currentX = 0, currentY = 0;
+      var direction = null; // null=undetermined, 'h'=horizontal, 'v'=vertical
+      var rafId = null;
+      var hint = inner.parentNode.querySelector('.swipe-delete-hint');
+
+      inner.ontouchstart = function(e) {
+        if (_flyingCard) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        currentX = startX;
+        currentY = startY;
+        direction = null;
+        inner.style.transition = 'none';
+        inner.dataset.swiping = '';
+        if (hint) hint.style.opacity = '0';
+      };
+
+      inner.ontouchmove = function(e) {
+        if (_flyingCard) return;
+        currentX = e.touches[0].clientX;
+        currentY = e.touches[0].clientY;
+        var dx = currentX - startX;
+        var dy = currentY - startY;
+
+        if (direction === null && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+          direction = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+        }
+
+        if (direction === 'v') {
+          inner.dataset.swiping = '';
+          if (hint) hint.style.opacity = '0';
+          return;
+        }
+
+        if (Math.abs(dx) > 5) inner.dataset.swiping = '1';
+
+        // Cancel previous rAF to avoid queuing
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+
+        rafId = requestAnimationFrame(function() {
+          rafId = null;
+          if (dx < 0) {
+            var clamped = Math.max(dx, -MAX_FOLLOW);
+            inner.style.transform = 'translateX(' + clamped + 'px)';
+            // Red hint: fade in proportionally (0-80px → opacity 0-1)
+            if (hint) hint.style.opacity = Math.min(Math.abs(dx) / 60, 1).toFixed(2);
+          }
+        });
+      };
+
+      inner.ontouchend = function(e) {
+        if (_flyingCard) return;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+
+        var dx = currentX - startX;
+
+        if (direction === 'v' || Math.abs(dx) < CLICK_THRESHOLD) {
+          inner.dataset.swiping = '';
+          if (hint) hint.style.opacity = '0';
+          return;
+        }
+
+        if (dx < -SWIPE_THRESHOLD) {
+          // FLY-AWAY
+          var container = inner.closest('.swipe-container');
+          // Disable interactions immediately
+          inner.style.pointerEvents = 'none';
+          if (hint) hint.style.opacity = '0';
+          inner.classList.add('flying');
+          inner.dataset.swiping = '';
+          _flyingCard = inner;
+
+          setTimeout(function() {
+            deleteTaskAfterFly(inner.dataset.taskId, container);
+          }, 230);
+        } else {
+          // REBOUND
+          if (hint) hint.style.opacity = '0';
+          inner.classList.add('rebounding');
+          inner.dataset.swiping = '';
+          setTimeout(function() {
+            inner.classList.remove('rebounding');
+            inner.style.transition = '';
+          }, 210);
+        }
+      };
+
+      inner.ontouchcancel = function() {
+        if (_flyingCard) return;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        direction = null;
+        inner.style.transition = 'transform 200ms cubic-bezier(0.25, 1, 0.5, 1)';
+        inner.style.transform = 'translateX(0)';
+        inner.dataset.swiping = '';
+        if (hint) hint.style.opacity = '0';
+      };
+    })();
+  }
+}
+
+function filterTasks(btn, filter) {
+  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = filter;
+  renderHome();
+}
+
+function triggerCelebration() {
+  const ring = document.getElementById('celebration-ring');
+  ring.style.animation = 'none';
+  ring.offsetHeight; // reflow
+  ring.style.animation = 'celebrate 600ms ease-out forwards';
+}
+
+/* ========================================
+   ADD TASK MODAL
+======================================== */
+function openAddModal() {
+  document.getElementById('add-modal').classList.add('open');
+  document.getElementById('task-input').value = '';
+  setTimeout(() => document.getElementById('task-input').focus(), 400);
+}
+
+function closeAddModal() {
+  document.getElementById('add-modal').classList.remove('open');
+}
+
+function closeModalOnBg(e) {
+  if (e.target === document.getElementById('add-modal')) closeAddModal();
+}
+
+function selectCategory(cat) {
+  addCategory = cat;
+  document.getElementById('cat-work').classList.toggle('selected', cat === 'work');
+  document.getElementById('cat-life').classList.toggle('selected', cat === 'life');
+}
+
+function selectPriority(pri) {
+  addPriority = pri;
+  document.getElementById('pri-urgent').classList.toggle('selected', pri === 'urgent');
+  document.getElementById('pri-routine').classList.toggle('selected', pri === 'routine');
+}
+
+function addTask() {
+  const input = document.getElementById('task-input');
+  const title = input.value.trim();
+  if (!title) { input.focus(); input.style.borderColor = '#ef4444'; setTimeout(() => input.style.borderColor = '', 800); return; }
+
+  const key = getTodayKey();
+  if (!state.tasks[key]) state.tasks[key] = [];
+  state.tasks[key].push({
+    id: `${key}-${Date.now()}`,
+    title,
+    category: addCategory,
+    priority: addPriority,
+    completed: false
+  });
+  saveState();
+  closeAddModal();
+  renderHome();
+  showToast('任务已添加 👍');
+}
+
+/* ========================================
+   LOG SCREEN
+======================================== */
+function renderLog() {
+  // Streak
+  const streak = calcStreak();
+  const maxStreak = calcMaxStreak();
+  document.getElementById('streak-num').textContent = streak;
+  document.getElementById('max-streak-num').textContent = maxStreak;
+
+  // Heatmap
+  renderHeatmap();
+}
+
+function renderHeatmap() {
+  const now = new Date();
+  if (heatmapYear === undefined) { heatmapYear = now.getFullYear(); heatmapMonth = now.getMonth(); }
+
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  document.getElementById('month-name').textContent = `${heatmapYear}年 ${monthNames[heatmapMonth]}`;
+
+  const firstDay = new Date(heatmapYear, heatmapMonth, 1).getDay();
+  const daysInMonth = new Date(heatmapYear, heatmapMonth + 1, 0).getDate();
+  const today = formatDateKey(now);
+
+  const grid = document.getElementById('heatmap-grid');
+  let html = '';
+
+  // Empty cells before month start
+  for (let i = 0; i < firstDay; i++) html += `<div class="heatmap-cell empty"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(heatmapYear, heatmapMonth, d);
+    const key = formatDateKey(date);
+    const isFuture = key > today;
+    const isToday = key === today;
+
+    let level = 0;
+    if (!isFuture && state.history[key]) {
+      const h = state.history[key];
+      const ratio = h.count > 0 ? h.completed / h.count : 0;
+      if (h.completed >= 1) level = 1;
+      if (h.completed >= 3) level = 2;
+      if (ratio >= 0.5) level = 3;
+      if (ratio >= 1) level = 4;
+    }
+
+    const classes = ['heatmap-cell'];
+    if (isFuture) classes.push('future');
+    if (isToday) classes.push('today');
+    if (!isFuture && level > 0) classes.push(`level-${level}`);
+
+    const clickHandler = isFuture ? '' : `onclick="showDayDetail('${key}', ${d})"`;
+    html += `<div class="${classes.join(' ')}" ${clickHandler} title="${key}"></div>`;
+  }
+
+  grid.innerHTML = html;
+}
+
+function changeMonth(dir) {
+  heatmapMonth += dir;
+  if (heatmapMonth > 11) { heatmapMonth = 0; heatmapYear++; }
+  if (heatmapMonth < 0) { heatmapMonth = 11; heatmapYear--; }
+  renderHeatmap();
+}
+
+function showDayDetail(key, day) {
+  const tasks = state.tasks[key] || [];
+  const monthNames = ['1','2','3','4','5','6','7','8','9','10','11','12'];
+  const date = new Date(key);
+
+  document.getElementById('day-modal-title').textContent =
+    `${date.getFullYear()}年${monthNames[date.getMonth()]}月${day}日`;
+
+  const completedTasks = tasks.filter(t => t.completed);
+  if (completedTasks.length === 0) {
+    document.getElementById('day-modal-content').innerHTML = `<div class="no-data">这天没有完成任务记录</div>`;
+  } else {
+    document.getElementById('day-modal-content').innerHTML = completedTasks.map(t => `
+      <div class="detail-task-item">
+        <div class="detail-dot"></div>
+        <div class="detail-task-name">${escapeHtml(t.title)}</div>
+        <span class="task-tag tag-${t.category}" style="margin-left:auto">${t.category === 'work' ? '工作' : '生活'}</span>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('day-modal').classList.add('open');
+}
+
+function closeDayModal(e) {
+  if (e.target === document.getElementById('day-modal')) {
+    document.getElementById('day-modal').classList.remove('open');
+  }
+}
+
+function calcStreak() {
+  const today = new Date();
+  let streak = 0;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = formatDateKey(d);
+    const h = state.history[key];
+    if (h && h.completed > 0) streak++;
+    else if (i > 0) break;
+  }
+  return streak;
+}
+
+function calcMaxStreak() {
+  const today = new Date();
+  let max = 0, cur = 0;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = formatDateKey(d);
+    const h = state.history[key];
+    if (h && h.completed > 0) { cur++; max = Math.max(max, cur); }
+    else cur = 0;
+  }
+  return max;
+}
+
+/* ========================================
+   PROFILE SCREEN
+======================================== */
+function renderProfile() {
+  const today = getTodayKey();
+  const todayTasks = state.tasks[today] || [];
+  const todayDone = todayTasks.filter(t => t.completed).length;
+  const streak = calcStreak();
+
+  // Total completed all time
+  let totalDone = 0, workCount = 0, lifeCount = 0, urgentCount = 0, routineCount = 0;
+  Object.values(state.tasks).forEach(tasks => {
+    tasks.forEach(t => {
+      if (t.completed) {
+        totalDone++;
+        if (t.category === 'work') workCount++; else lifeCount++;
+        if (t.priority === 'urgent') urgentCount++; else routineCount++;
+      }
+    });
+  });
+
+  document.getElementById('stat-total').textContent = totalDone;
+  document.getElementById('stat-today').textContent = todayDone;
+  document.getElementById('stat-streak').textContent = streak;
+  document.getElementById('streak-big').textContent = streak;
+
+  // Donut chart
+  const totalCat = workCount + lifeCount;
+  const workPct = totalCat ? Math.round(workCount/totalCat*100) : 50;
+  const lifePct = 100 - workPct;
+  const circ = 251.33;
+  document.getElementById('donut-work').style.strokeDashoffset = circ - (circ * workPct / 100);
+  document.getElementById('donut-life').style.strokeDashoffset = circ - (circ * lifePct / 100);
+  // Offset life to start after work
+  document.getElementById('donut-life').style.strokeDasharray = `${circ * lifePct / 100} ${circ}`;
+  document.getElementById('donut-life').style.strokeDashoffset = -(circ * workPct / 100) + '';
+  document.getElementById('work-pct').textContent = `${workPct}% (${workCount}个)`;
+  document.getElementById('life-pct').textContent = `${lifePct}% (${lifeCount}个)`;
+
+  // Bar chart
+  const maxBar = Math.max(urgentCount, routineCount, 1);
+  document.getElementById('bar-chart').innerHTML = `
+    <div class="bar-row">
+      <span class="bar-label">紧急</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${urgentCount/maxBar*100}%;background:#ef4444"></div></div>
+      <span class="bar-val">${urgentCount}</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">日常</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${routineCount/maxBar*100}%"></div></div>
+      <span class="bar-val">${routineCount}</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">工作</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${workCount/maxBar*100}%;background:#f59e0b"></div></div>
+      <span class="bar-val">${workCount}</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">生活</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${lifeCount/maxBar*100}%;background:#8b5cf6"></div></div>
+      <span class="bar-val">${lifeCount}</span>
+    </div>
+  `;
+
+  // Line chart: last 14 days
+  renderLineChart();
+
+  // Weekly trend chart: last 7 days completion rate
+  renderWeeklyTrend();
+}
+
+function renderLineChart() {
+  const today = new Date();
+  const days = 14;
+  const data = [];
+  for (let i = days-1; i >= 0; i--) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    const key = formatDateKey(d);
+    const h = state.history[key];
+    data.push({ day: d.getDate(), value: h ? h.completed : 0 });
+  }
+
+  const W = 320, H = 140, padL = 32, padR = 12, padT = 16, padB = 28;
+  const maxVal = Math.max(...data.map(d => d.value), 1);
+  const xStep = (W - padL - padR) / (days - 1);
+
+  const points = data.map((d, i) => ({
+    x: padL + i * xStep,
+    y: padT + (H - padT - padB) * (1 - d.value / maxVal)
+  }));
+
+  // Smooth path
+  let pathD = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    const cp1x = points[i-1].x + xStep/3;
+    const cp2x = points[i].x - xStep/3;
+    pathD += ` C ${cp1x} ${points[i-1].y} ${cp2x} ${points[i].y} ${points[i].x} ${points[i].y}`;
+  }
+
+  // Area fill
+  let areaD = pathD + ` L ${points[points.length-1].x} ${H-padB} L ${points[0].x} ${H-padB} Z`;
+
+  // X labels (show every other)
+  const xLabels = data.map((d, i) => {
+    if (i % 2 === 0) return `<text x="${padL + i * xStep}" y="${H-padB+14}" text-anchor="middle" fill="#9bb898" font-size="10">${d.day}</text>`;
+    return '';
+  }).join('');
+
+  // Y grid lines
+  const gridLines = [0, 0.5, 1].map(r => {
+    const y = padT + (H - padT - padB) * (1 - r);
+    const val = Math.round(maxVal * r);
+    return `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e2f0df" stroke-width="1"/>
+            <text x="${padL-4}" y="${y+3}" text-anchor="end" fill="#9bb898" font-size="10">${val}</text>`;
+  }).join('');
+
+  document.getElementById('line-chart').innerHTML = `
+    <defs>
+      <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#22c55e" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    ${gridLines}
+    <path d="${areaD}" fill="url(#lineGrad)"/>
+    <path d="${pathD}" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round"/>
+    ${points.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="#22c55e"/>`).join('')}
+    ${xLabels}
+  `;
+}
+
+function renderWeeklyTrend() {
+  const today = new Date();
+  const days = 7;
+  const data = [];
+
+  // Collect last 7 days data
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = formatDateKey(d);
+    const h = state.history[key];
+    const count = h ? (h.count || 0) : 0;
+    const completed = h ? (h.completed || 0) : 0;
+    const rate = count > 0 ? completed / count : 0;
+    data.push({
+      date: d,
+      dateLabel: `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      count,
+      completed,
+      rate
+    });
+  }
+
+  // Check if all data is empty
+  const hasData = data.some(d => d.count > 0);
+  const svg = document.getElementById('weekly-trend');
+
+  if (!hasData) {
+    svg.innerHTML = `<text x="160" y="64" text-anchor="middle" fill="#9bb898" font-size="14" font-family="Inter, sans-serif" font-weight="500">暂无数据</text>`;
+    return;
+  }
+
+  const W = 320, H = 120;
+  const padL = 24, padR = 20, padT = 12, padB = 30;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const xStep = chartW / (days - 1);
+
+  // Calculate points (Y: 0 at bottom = 100%, chartH at top = 0%)
+  const points = data.map((d, i) => ({
+    x: padL + i * xStep,
+    y: padT + chartH * (1 - d.rate)
+  }));
+
+  // Build smooth line path using cubic bezier
+  let pathD = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    const cp1x = points[i - 1].x + xStep / 3;
+    const cp2x = points[i].x - xStep / 3;
+    pathD += ` C ${cp1x} ${points[i - 1].y} ${cp2x} ${points[i].y} ${points[i].x} ${points[i].y}`;
+  }
+
+  // Area fill path (line down to bottom, then back along baseline)
+  const areaD = pathD + ` L ${points[points.length - 1].x} ${padT + chartH} L ${padL} ${padT + chartH} Z`;
+
+  // Horizontal grid lines at 0%, 25%, 50%, 75%, 100%
+  const gridLevels = [0, 0.25, 0.5, 0.75, 1];
+  const gridLines = gridLevels.map(r => {
+    const y = padT + chartH * (1 - r);
+    return `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#e2f0df" stroke-width="1"/>`;
+  }).join('');
+
+  // X-axis labels (MM-DD)
+  const xLabels = data.map((d, i) => {
+    return `<text x="${padL + i * xStep}" y="${H - 10}" text-anchor="middle" fill="#9bb898" font-size="11" font-family="Inter, sans-serif" font-weight="500">${d.dateLabel}</text>`;
+  }).join('');
+
+  // Data point dots
+  const dots = points.map(p => {
+    return `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#22c55e"><animate attributeName="r" values="0;3.5" dur="0.4s" fill="freeze"/></circle>`;
+  }).join('');
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="weeklyGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#dcfce7" stop-opacity="0.8"/>
+        <stop offset="100%" stop-color="#dcfce7" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <!-- Grid lines -->
+    ${gridLines}
+    <!-- Area fill -->
+    <path d="${areaD}" fill="url(#weeklyGrad)"/>
+    <!-- Line -->
+    <path d="${pathD}" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"/>
+    <!-- Data points -->
+    ${dots}
+    <!-- X-axis labels -->
+    ${xLabels}
+  `;
+}
+
+/* ========================================
+   TOAST
+======================================== */
+const encouragements = [
+  '很棒，继续！', '保持节奏 🎯', '你做得很好', '一步一步来', '专注当下',
+  '完成又一个！', '低压前行 🌿', '平静的力量', '每天一点点', '积累的魔法'
+];
+function randomEncouragement() { return encouragements[Math.floor(Math.random()*encouragements.length)]; }
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ========================================
+   CLEAR RECORDS
+======================================== */
+function openClearConfirm() {
+  document.getElementById('clear-confirm-overlay').style.display = 'flex';
+}
+function closeClearConfirm() {
+  document.getElementById('clear-confirm-overlay').style.display = 'none';
+}
+function clearAllRecords() {
+  // Clear the actual storage keys used by the app
+  localStorage.removeItem('serene_logic_v2');
+  localStorage.removeItem('serene_last_date');
+  // Reset in-memory state
+  state = { tasks: {}, history: {} };
+  tasks = [];
+  closeClearConfirm();
+  renderHome();
+  renderLog();
+  renderProfile();
+  showToast('记录已清除');
+}
+
+/* ========================================
+   IMPORT / EXPORT
+======================================== */
+let _pendingImportData = null;
+
+function getExportPayload() {
+  // Collect all serene_* localStorage keys
+  const payload = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('serene_')) {
+      payload[key] = localStorage.getItem(key);
+    }
+  }
+  return payload;
+}
+
+function exportData() {
+  const btn = document.getElementById('btn-export');
+  if (btn.classList.contains('stats-action-btn--disabled')) return;
+  btn.classList.add('stats-action-btn--disabled');
+
+  try {
+    const payload = getExportPayload();
+    const exportObj = {
+      data_version: '1.0',
+      export_time: new Date().toISOString(),
+      payload: payload
+    };
+
+    // Generate filename: 今日事今日毕-备份-YYYYMMDD-HHmmss.json
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const ts = [
+      now.getFullYear(), pad(now.getMonth() + 1), pad(now.getDate()),
+      '-',
+      pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())
+    ].join('');
+    const filename = `今日事今日毕-备份-${ts}.json`;
+
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('数据导出成功，文件已保存至浏览器下载目录');
+  } catch (e) {
+    showToast('导出失败，请重试');
+  }
+
+  setTimeout(() => btn.classList.remove('stats-action-btn--disabled'), 500);
+}
+
+function triggerImport() {
+  const btn = document.getElementById('btn-import');
+  if (btn.classList.contains('stats-action-btn--disabled')) return;
+
+  // Reset file input so change event fires even for same file
+  const fileInput = document.getElementById('import-file-input');
+  fileInput.value = '';
+  fileInput.click();
+}
+
+function handleImportFile(input) {
+  const btn = document.getElementById('btn-import');
+  btn.classList.add('stats-action-btn--disabled');
+
+  const file = input.files[0];
+  if (!file) {
+    btn.classList.remove('stats-action-btn--disabled');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const obj = JSON.parse(e.target.result);
+
+      // Validate structure
+      if (!obj.data_version || !obj.payload || typeof obj.payload !== 'object') {
+        throw new Error('INVALID_FORMAT');
+      }
+
+      // Version check: only 1.x compatible
+      const majorVer = parseInt(obj.data_version.split('.')[0]);
+      if (isNaN(majorVer) || majorVer > 1) {
+        showToast('该备份文件版本不兼容，请更新应用后再尝试');
+        btn.classList.remove('stats-action-btn--disabled');
+        return;
+      }
+
+      // Check payload has expected keys
+      const hasSereneKeys = Object.keys(obj.payload).some(k => k.startsWith('serene_'));
+      if (!hasSereneKeys) {
+        throw new Error('INVALID_FORMAT');
+      }
+
+      // Calculate summary
+      let taskCount = 0, historyDays = 0;
+      Object.entries(obj.payload).forEach(([k, v]) => {
+        if (k === 'serene_logic_v2') {
+          try {
+            const data = JSON.parse(v);
+            if (data.tasks) {
+              Object.values(data.tasks).forEach(arr => { taskCount += arr.length; });
+            }
+            if (data.history) {
+              historyDays = Object.keys(data.history).length;
+            }
+          } catch (_) {}
+        }
+      });
+
+      const exportTime = obj.export_time
+        ? new Date(obj.export_time).toLocaleString('zh-CN')
+        : '未知时间';
+
+      // Show confirm
+      _pendingImportData = obj.payload;
+      document.getElementById('import-confirm-title').textContent = '确认导入数据';
+      document.getElementById('import-confirm-desc').textContent =
+        `文件导出时间：${exportTime}\n包含 ${taskCount} 个任务、${historyDays} 天打卡记录\n\n导入将覆盖当前所有数据，是否继续？`;
+      document.getElementById('import-confirm-overlay').style.display = 'flex';
+
+      // Bind confirm handler
+      document.getElementById('import-confirm-btn').onclick = confirmImport;
+
+    } catch (err) {
+      if (err.message === 'INVALID_FORMAT') {
+        showToast('文件无效，请选择正确的备份文件');
+      } else {
+        showToast('文件损坏，无法解析');
+      }
+    }
+    btn.classList.remove('stats-action-btn--disabled');
+  };
+
+  reader.onerror = function() {
+    showToast('文件读取失败，请重试');
+    btn.classList.remove('stats-action-btn--disabled');
+  };
+
+  reader.readAsText(file);
+}
+
+function confirmImport() {
+  if (!_pendingImportData) return;
+
+  const btn = document.getElementById('import-confirm-btn');
+  btn.style.pointerEvents = 'none';
+  btn.textContent = '导入中...';
+
+  // Write all payload keys to localStorage
+  Object.entries(_pendingImportData).forEach(([key, value]) => {
+    localStorage.setItem(key, value);
+  });
+
+  // Reload state
+  loadState();
+
+  // Refresh all screens
+  renderHome();
+  renderLog();
+  renderProfile();
+
+  // Close confirm
+  closeImportConfirm();
+
+  // Reset confirm button
+  btn.style.pointerEvents = '';
+  btn.textContent = '确认导入';
+
+  showToast('数据导入成功');
+
+  _pendingImportData = null;
+}
+
+function closeImportConfirm() {
+  document.getElementById('import-confirm-overlay').style.display = 'none';
+  _pendingImportData = null;
+  document.getElementById('btn-import').classList.remove('stats-action-btn--disabled');
+}
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setTodayDate() {
+  const d = new Date();
+  const weekdays = ['周日','周一','周二','周三','周四','周五','周六'];
+  const months = ['1','2','3','4','5','6','7','8','9','10','11','12'];
+  document.getElementById('today-date').textContent =
+    `${d.getFullYear()}年${months[d.getMonth()]}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
+}
+
+/* ========================================
+   KEYBOARD HANDLER
+======================================== */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('add-modal').classList.contains('open')) addTask();
+  if (e.key === 'Escape') {
+    document.getElementById('add-modal').classList.remove('open');
+    document.getElementById('day-modal').classList.remove('open');
+  }
+});
+
+/* ========================================
+   INIT
+======================================== */
+loadState();
+setTodayDate();
+renderHome();
+
+// Handle day reset check (simple version)
+const lastDate = localStorage.getItem('serene_last_date');
+const todayStr = getTodayKey();
+if (lastDate && lastDate !== todayStr) {
+  // New day detected, tasks stay in history but today starts fresh
+  showToast('新的一天，新的开始 🌱');
+}
+localStorage.setItem('serene_last_date', todayStr);
+</script>
+<script>
+// PWA — Service Worker 注册
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').then(function (reg) {
+      console.log('[PWA] Service Worker 注册成功:', reg.scope);
+    }).catch(function (err) {
+      console.log('[PWA] Service Worker 注册失败:', err);
+    });
+  });
+}
+</script>
+</body>
+</html>
