@@ -1,0 +1,43 @@
+{
+  "name": "今日事今日毕",
+  "short_name": "今日待办",
+  "description": "一个简洁清新的待办应用 — 平静、专注、每一天",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "start_url": "index.html",
+  "scope": "/",
+  "id": "serene-today-pwa",
+  "background_color": "#f3fcef",
+  "theme_color": "#22c55e",
+  "categories": ["productivity", "lifestyle"],
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "添加任务",
+      "short_name": "添加",
+      "description": "快速添加新任务",
+      "url": "index.html?action=add",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "related_applications": [],
+  "launch_handler": { "client_mode": "navigate-existing" }
+}
