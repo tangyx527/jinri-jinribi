@@ -1118,6 +1118,27 @@ body {
   };
 })();
 
+// ---- PWA 安装弹窗（所有浏览器统一弹出原生安装提示） ----
+(function () {
+  var _installPrompt = null;
+
+  // 标准渠道：Chrome / Edge / 等
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    _installPrompt = e;
+  });
+
+  // 延迟弹出，确保页面加载完成后触发
+  setTimeout(function () {
+    if (_installPrompt) {
+      _installPrompt.prompt();
+      _installPrompt.userChoice.then(function () {
+        _installPrompt = null;
+      });
+    }
+  }, 1500);
+})();
+
 /* ============================================================
    2. 常量 & 配置
    ============================================================ */
