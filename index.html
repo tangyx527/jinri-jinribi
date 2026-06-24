@@ -315,8 +315,14 @@ body {
   padding: 0 24px 40px;
   transform: translateY(100%);
   transition: transform 350ms var(--ease-out);
+  will-change: transform;
 }
 .modal-overlay.open .modal-sheet { transform: translateY(0); }
+/* 键盘弹起时向上偏移（由 JS 动态设置 --kb-offset） */
+.modal-overlay.keyboard-open .modal-sheet {
+  transform: translateY(calc(var(--kb-offset, 0px)));
+  transition: transform 200ms var(--ease-out);
+}
 .modal-handle { width: 36px; height: 4px; background: var(--gray-200); border-radius: 2px; margin: 12px auto 20px; }
 .modal-title  { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 20px; }
 
@@ -1889,13 +1895,108 @@ function triggerCelebration() {
 /* ============================================================
    7. 添加任务弹窗
    ============================================================ */
+var _kbListening = false;
+var _kbBaseHeight = 0;
+var _kbRafId = 0;
+
+/**
+ * 启动键盘适配监听（弹窗打开时调用）
+ * 使用 visualViewport API 监听可视区域高度变化，
+ * 兼容 PWA standalone 模式与普通浏览器模式
+ */
+function startKeyboardAdapt() {
+  if (!window.visualViewport || _kbListening) return;
+  _kbListening = true;
+
+  // 记录初始可视高度作为基准
+  _kbBaseHeight = window.innerHeight;
+
+  window.visualViewport.addEventListener('resize', onViewportResize);
+  window.visualViewport.addEventListener('scroll', onViewportResize);
+}
+
+/**
+ * 停止键盘适配监听（弹窗关闭时调用）
+ */
+function stopKeyboardAdapt() {
+  if (!window.visualViewport || !_kbListening) return;
+  _kbListening = false;
+
+  window.visualViewport.removeEventListener('resize', onViewportResize);
+  window.visualViewport.removeEventListener('scroll', onViewportResize);
+
+  // 移除键盘偏移，恢复弹窗原位置
+  var overlay = document.getElementById('add-modal');
+  if (overlay) {
+    overlay.classList.remove('keyboard-open');
+    overlay.style.removeProperty('--kb-offset');
+  }
+}
+
+/**
+ * visualViewport resize/scroll 事件处理
+ * 使用 requestAnimationFrame 节流，避免高频触发造成抖动
+ */
+function onViewportResize() {
+  if (_kbRafId) return;
+  _kbRafId = requestAnimationFrame(function () {
+    _kbRafId = 0;
+    adjustForKeyboard();
+  });
+}
+
+/**
+ * 根据键盘弹起高度，动态偏移底部弹窗
+ *
+ * 计算逻辑：
+ *   keyboardHeight = window.innerHeight - visualViewport.height - visualViewport.offsetTop
+ *   当 keyboardHeight > 60px 时判定键盘已弹起，将弹窗向上偏移 keyboardHeight
+ *   偏移上限为视口高度的 60%，防止小屏设备偏移过度
+ */
+function adjustForKeyboard() {
+  var overlay = document.getElementById('add-modal');
+  if (!overlay || !overlay.classList.contains('open')) return;
+
+  var vv = window.visualViewport;
+  if (!vv) return;
+
+  // 键盘高度 = 窗口高度 - 可视区域高度 - 可视区域顶部偏移
+  var vpHeight = window.innerHeight;
+  var keyboardHeight = vpHeight - vv.height - (vv.offsetTop || 0);
+
+  // 阈值：键盘高度 > 60px 才认为是键盘弹起（排除地址栏收起等小幅变化）
+  var KEYBOARD_THRESHOLD = 60;
+
+  if (keyboardHeight > KEYBOARD_THRESHOLD) {
+    // 键盘弹起 → 向上偏移
+    // 限制最大偏移量，避免小屏设备偏移过度
+    var maxOffset = Math.min(keyboardHeight, vpHeight * 0.6);
+    overlay.style.setProperty('--kb-offset', '-' + maxOffset + 'px');
+    overlay.classList.add('keyboard-open');
+  } else {
+    // 键盘收起 → 恢复原位
+    overlay.classList.remove('keyboard-open');
+    overlay.style.removeProperty('--kb-offset');
+  }
+}
+
 function openAddModal() {
   $('add-modal').classList.add('open');
   $('task-input').value = '';
-  setTimeout(function () { var inp = $('task-input'); if (inp) inp.focus(); }, 400);
+  setTimeout(function () {
+    var inp = $('task-input');
+    if (inp) {
+      inp.focus();
+      // 聚焦后启动键盘适配监听
+      startKeyboardAdapt();
+    }
+  }, 400);
 }
 
-function closeAddModal() { $('add-modal').classList.remove('open'); }
+function closeAddModal() {
+  stopKeyboardAdapt();
+  $('add-modal').classList.remove('open');
+}
 
 function closeModalOnBg(e) { if (e.target === $('add-modal')) closeAddModal(); }
 
