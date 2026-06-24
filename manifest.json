@@ -7,19 +7,20 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "start_url": "index.html",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "id": "serene-today-pwa",
   "background_color": "#f3fcef",
   "theme_color": "#22c55e",
   "categories": ["productivity", "lifestyle"],
   "prefer_related_applications": false,
+  "iarc_rating_id": "",
   "shortcuts": [
     {
       "name": "添加任务",
       "short_name": "添加",
       "description": "快速添加新任务",
-      "url": "index.html?action=add",
+      "url": "./?action=add",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     }
   ],

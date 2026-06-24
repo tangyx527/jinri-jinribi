@@ -1,30 +1,27 @@
 /* ============================================================
    service-worker.js — 今日事今日毕 PWA
-   缓存优先策略 + 版本管理 + 自动更新
+   缓存优先策略 + 版本管理 + skipWaiting 立即激活 + 自动更新
    不干扰 localStorage / IndexedDB 数据读写
    兼容 Chrome / Edge / Android / iOS Safari
 
-   ⚠️ 版本联动：
-   每次发布新版本，请同时更新：
-   1. 此处的 CACHE_VERSION
-   2. index.html 中的 APP_VERSION 常量
-   两者保持一致即可触发更新公告弹窗
+   ⚠️ 发版操作：每次发布新版本，只需修改下面的 CACHE_VERSION 即可
+     同步修改 index.html 中的 APP_VERSION 常量，保持一致触发公告弹窗
 ============================================================ */
 
-/* ---- 缓存版本（发布新版本时递增） ---- */
+/* ---- 缓存版本（发版时递增此处） ---- */
 var CACHE_VERSION = 'serene-today-v1';
 var CACHE_NAME = 'serene-today-' + CACHE_VERSION;
 
-/* ---- 预缓存资源列表 ---- */
+/* ---- 预缓存资源列表（相对路径，适配子目录部署） ---- */
 var PRECACHE_URLS = [
-  '/',
+  './',
   'index.html',
   'manifest.json'
   // 外部 CDN（Google Fonts）默认不缓存，离线时降级为系统字体
 ];
 
 /* ============================================================
-   INSTALL — 预缓存核心资源，立即激活
+   INSTALL — 预缓存核心资源，完成后立即 skipWaiting
 ============================================================ */
 self.addEventListener('install', function (event) {
   event.waitUntil(
@@ -32,35 +29,44 @@ self.addEventListener('install', function (event) {
       return Promise.all(
         PRECACHE_URLS.map(function (url) {
           return cache.add(url).catch(function (err) {
-            // 单个资源失败不阻塞整体安装
             console.warn('[SW] 预缓存失败:', url, err.message);
           });
         })
       );
-    }).then(function () {
-      return self.skipWaiting(); // 立即激活，不等待旧 SW 释放
+    })
+    .then(function () {
+      // ★ 立即跳过等待，不等待旧 SW 释放页面
+      return self.skipWaiting();
     })
   );
 });
 
 /* ============================================================
-   ACTIVATE — 清理旧缓存，接管所有客户端
+   ACTIVATE — 清理所有旧版本缓存 + 接管所有客户端
 ============================================================ */
 self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(
-        keys
-          .filter(function (name) {
-            return name.startsWith('serene-today-') && name !== CACHE_NAME;
-          })
-          .map(function (name) {
+        keys.map(function (name) {
+          // 删除所有 serene-today- 前缀但不是当前版本的缓存
+          if (name.startsWith('serene-today-') && name !== CACHE_NAME) {
             return caches.delete(name);
-          })
+          }
+        })
       );
-    }).then(function () {
-      // 接管所有页面，确保新版 SW 立即控制
+    })
+    .then(function () {
+      // ★ 激活后立即接管所有打开的页面（无需用户关闭重开）
       return self.clients.claim();
+    })
+    .then(function () {
+      // ★ 通知所有打开的页面：新版本已激活，可刷新
+      return self.clients.matchAll({ type: 'window' }).then(function (clients) {
+        clients.forEach(function (client) {
+          client.postMessage({ type: 'SW_UPDATED', version: CACHE_VERSION });
+        });
+      });
     })
   );
 });
@@ -109,10 +115,19 @@ self.addEventListener('fetch', function (event) {
 });
 
 /* ============================================================
-   MESSAGE — 允许页面主动触发 SW 更新
+   MESSAGE — 页面 ↔ SW 通信
+   支持：
+   - SKIP_WAITING：页面主动触发 SW 激活
+   - GET_VERSION：页面查询当前 SW 版本号
 ============================================================ */
 self.addEventListener('message', function (event) {
   if (event.data === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  if (event.data === 'GET_VERSION') {
+    // 回复版本号给请求的客户端
+    if (event.source) {
+      event.source.postMessage({ type: 'SW_VERSION', version: CACHE_VERSION });
+    }
   }
 });
