@@ -58,10 +58,12 @@ self.addEventListener('activate', function (event) {
     })
     .then(function () {
       // ★ 激活后立即接管所有打开的页面（无需用户关闭重开）
+      //    clients.claim() 会触发页面的 controllerchange 事件
       return self.clients.claim();
     })
     .then(function () {
       // ★ 通知所有打开的页面：新版本已激活，可刷新
+      //    双重通知：postMessage + controllerchange 事件确保页面收到更新
       return self.clients.matchAll({ type: 'window' }).then(function (clients) {
         clients.forEach(function (client) {
           client.postMessage({ type: 'SW_UPDATED', version: CACHE_VERSION });
