@@ -98,7 +98,8 @@ body {
 .confirm-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.45);
   display: flex; align-items: flex-end; justify-content: center;
-  z-index: 300; padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 300;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--keyboard-height, 0px));
 }
 .confirm-sheet {
   background: #fff; border-radius: 20px 20px 0 0;
@@ -132,7 +133,7 @@ body {
   display: flex;
   height: 72px;
   z-index: 100;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--keyboard-height, 0px));
 }
 .nav-item {
   flex: 1;
@@ -283,6 +284,7 @@ body {
               margin-bottom 180ms cubic-bezier(0.2, 0, 0.1, 1),
               opacity 180ms linear;
 }
+.swipe-container:has(.swipe-inner.flying) { overflow: visible; }
 .swipe-container.collapsing {
   max-height: 0;
   margin-top: 0;
@@ -422,30 +424,89 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
   backdrop-filter: blur(4px);
   z-index: 200;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
+  justify-content: center;
   opacity: 0;
   pointer-events: none;
   transition: opacity 250ms;
 }
 .modal-overlay.open { opacity: 1; pointer-events: all; }
-.modal-sheet {
+
+/* 添加任务弹窗 — 屏幕上半区固定弹出 */
+#add-modal {
+  padding-top: calc(15vh + env(safe-area-inset-top, 0px));
+  align-items: flex-start;
+}
+#add-modal .modal-sheet {
+  width: calc(100% - 32px);
+  max-width: 398px;
+  margin: 0 16px;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 24px 24px 32px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 250ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+}
+#add-modal.open .modal-sheet {
+  opacity: 1;
+  transform: translateY(0);
+}
+#add-modal .modal-handle { display: none; }
+
+/* 其他底部弹窗保持原有底部贴靠样式 */
+#day-modal {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--keyboard-height, 0px));
+  align-items: flex-end;
+}
+#day-modal .modal-sheet {
   width: 100%;
   max-width: 430px;
   margin: 0 auto;
   background: var(--white);
   border-radius: 24px 24px 0 0;
   padding: 0 24px 40px;
+  padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
   transform: translateY(100%);
   transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: calc(100vh - 40px - var(--keyboard-height, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
-.modal-overlay.open .modal-sheet { transform: translateY(0); }
-.modal-handle {
+#day-modal.open .modal-sheet { transform: translateY(0); }
+#day-modal .modal-handle {
   width: 36px; height: 4px;
   background: var(--gray-200);
   border-radius: 2px;
   margin: 12px auto 20px;
 }
-.modal-title { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 20px; }
+
+/* 小屏设备：弹窗下调，高度放宽 */
+@media (max-height: 699px) {
+  #add-modal {
+    padding-top: calc(10vh + env(safe-area-inset-top, 0px));
+  }
+  #add-modal .modal-sheet {
+    max-height: 65vh;
+  }
+}
+
+/* 横屏模式：弹窗垂直居中 */
+@media (orientation: landscape) and (max-height: 500px) {
+  #add-modal {
+    padding-top: 0;
+    align-items: center;
+  }
+  #add-modal .modal-sheet {
+    max-height: 80vh;
+  }
+}
+.modal-title { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 20px; text-align: center; }
 .form-group { margin-bottom: 16px; }
 .form-label { font-size: 13px; font-weight: 600; color: var(--gray-600); margin-bottom: 6px; display: block; }
 .form-input {
@@ -749,6 +810,116 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
   pointer-events: none;
 }
 
+/* Check update button */
+.stats-update-btn {
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gray-500);
+  background: transparent;
+  border: 1.5px dashed var(--gray-300);
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  margin-top: 4px;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 150ms, color 150ms, transform 100ms cubic-bezier(0.16,1,0.3,1);
+}
+.stats-update-btn:active {
+  transform: scale(0.97);
+  border-color: var(--green-primary);
+  color: var(--green-primary);
+}
+.stats-update-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* SW Update overlay */
+.sw-update-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms cubic-bezier(0.16,1,0.3,1);
+}
+.sw-update-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+.sw-update-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 28px 24px 20px;
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+  transform: scale(0.92);
+  transition: transform 200ms cubic-bezier(0.16,1,0.3,1);
+}
+.sw-update-overlay.open .sw-update-card {
+  transform: scale(1);
+}
+.sw-update-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--green-pale);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  font-size: 24px;
+}
+.sw-update-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 8px;
+}
+.sw-update-desc {
+  font-size: 14px;
+  color: var(--gray-500);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.sw-update-actions {
+  display: flex;
+  gap: 10px;
+}
+.sw-update-cancel {
+  flex: 1;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  font-size: 15px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sw-update-confirm {
+  flex: 1;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--green-primary);
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 12px rgba(34,197,94,0.3);
+}
+
 /* ===== ANIMATIONS ===== */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -892,6 +1063,9 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
         <button class="stats-action-btn stats-action-btn--primary" id="btn-export" onclick="exportData()">导出数据</button>
         <button class="stats-action-btn stats-action-btn--secondary" id="btn-import" onclick="triggerImport()">导入数据</button>
       </div>
+
+      <!-- Check update button -->
+      <button class="stats-update-btn" id="btn-check-update" onclick="manualCheckUpdate()">检查版本更新</button>
 
       <!-- Mini stats row -->
       <div class="stats-row">
@@ -1072,11 +1246,83 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
   <!-- Hidden file input for import -->
   <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="handleImportFile(this)">
 
+  <!-- SW Update Confirmation Overlay -->
+  <div class="sw-update-overlay" id="sw-update-overlay">
+    <div class="sw-update-card">
+      <div class="sw-update-icon">🌿</div>
+      <div class="sw-update-title">发现新版本</div>
+      <div class="sw-update-desc">已获取最新功能优化，点击确认立即升级</div>
+      <div class="sw-update-actions">
+        <button class="sw-update-cancel" onclick="dismissUpdate()">稍后再说</button>
+        <button class="sw-update-confirm" onclick="applyUpdate()">立即更新</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 </div>
 
 <script>
+/* ========================================
+   APP VERSION & DATA MIGRATION
+======================================== */
+/**
+ * APP_DATA_VERSION: 本地数据结构版本号
+ * 每次调整 localStorage 存储字段时必须升级此常量
+ * 格式：major.minor（如 '1.1'）
+ * 迁移脚本在 migrateData() 中按版本顺序执行
+ */
+const APP_DATA_VERSION = '1.1';
+const DATA_VER_KEY = 'serene_data_version';
+
+/**
+ * migrateData — 按版本顺序执行增量迁移
+ * 只新增/补全字段，不删除用户数据
+ * @param {string} fromVer - 用户当前数据版本（null 表示新用户）
+ */
+function migrateData(fromVer) {
+  try {
+    // v1.0 → v1.1: state 对象确保 history 与 tasks 字段存在
+    if (!fromVer || versionLt(fromVer, '1.1')) {
+      if (!state.tasks)   state.tasks   = {};
+      if (!state.history) state.history = {};
+      // 兼容旧版本中 task 对象缺少 priority 字段
+      Object.values(state.tasks).forEach(dayTasks => {
+        if (!Array.isArray(dayTasks)) return;
+        dayTasks.forEach(task => {
+          if (!task.priority) task.priority = 'normal';
+          if (!task.category) task.category = 'life';
+          if (typeof task.completed === 'undefined') task.completed = false;
+        });
+      });
+      saveState();
+      console.log('[DataMigration] 迁移至 v1.1 完成');
+    }
+    // 未来版本在此追加：
+    // if (versionLt(fromVer, '1.2')) { ... }
+  } catch(err) {
+    console.error('[DataMigration] 迁移异常，保留原始数据:', err);
+    showToast('数据兼容初始化异常，原数据已保留');
+  }
+}
+
+/**
+ * versionLt — 比较版本号 a < b
+ * @param {string} a
+ * @param {string} b
+ */
+function versionLt(a, b) {
+  const pa = (a || '0.0').split('.').map(Number);
+  const pb = (b || '0.0').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (na < nb) return true;
+    if (na > nb) return false;
+  }
+  return false;
+}
+
 /* ========================================
    STATE MANAGEMENT
 ======================================== */
@@ -1087,12 +1333,40 @@ let state = {
 };
 
 function loadState() {
+  // 读取数据版本号
+  const savedVer = localStorage.getItem(DATA_VER_KEY) || null;
+
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) state = JSON.parse(saved);
-  } catch(e) {}
-  // Seed demo data if first visit
-  if (Object.keys(state.tasks).length === 0) seedDemoData();
+    if (saved) {
+      state = JSON.parse(saved);
+    }
+  } catch(e) {
+    console.error('[loadState] 数据解析失败，初始化默认数据');
+    state = { tasks: {}, history: {} };
+  }
+
+  // 确保基础字段存在（兜底防崩溃）
+  if (!state.tasks)   state.tasks   = {};
+  if (!state.history) state.history = {};
+
+  // 新用户：写入默认版本号，不执行迁移
+  if (!savedVer) {
+    localStorage.setItem(DATA_VER_KEY, APP_DATA_VERSION);
+    // Seed demo data if first visit
+    if (Object.keys(state.tasks).length === 0) seedDemoData();
+    return;
+  }
+
+  // 旧版本用户：执行增量数据迁移
+  if (versionLt(savedVer, APP_DATA_VERSION)) {
+    migrateData(savedVer);
+    localStorage.setItem(DATA_VER_KEY, APP_DATA_VERSION);
+    console.log(`[DataMigration] ${savedVer} → ${APP_DATA_VERSION}`);
+  } else {
+    // 版本一致，无需迁移
+    if (Object.keys(state.tasks).length === 0) seedDemoData();
+  }
 }
 
 function saveState() {
@@ -1283,6 +1557,9 @@ function toggleTask(id) {
 let _flyingCard = null;
 
 function deleteTaskAfterFly(id, container) {
+  // 无论成功与否都必须释放锁，防止 _flyingCard 泄漏导致全部滑动失效
+  _flyingCard = null;
+
   const tasks = getTodayTasks();
   const idx = tasks.findIndex(t => t.id === id);
   if (idx === -1) return;
@@ -1306,8 +1583,6 @@ function deleteTaskAfterFly(id, container) {
     updateTodayHistory();
     showToast('任务已删除');
   }, 190);
-
-  _flyingCard = null;
 }
 
 function bindSwipeEvents() {
@@ -1322,7 +1597,6 @@ function bindSwipeEvents() {
       var startX = 0, startY = 0;
       var currentX = 0, currentY = 0;
       var direction = null; // null=undetermined, 'h'=horizontal, 'v'=vertical
-      var rafId = null;
       var hint = inner.parentNode.querySelector('.swipe-delete-hint');
 
       inner.ontouchstart = function(e) {
@@ -1356,23 +1630,16 @@ function bindSwipeEvents() {
 
         if (Math.abs(dx) > 5) inner.dataset.swiping = '1';
 
-        // Cancel previous rAF to avoid queuing
-        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-
-        rafId = requestAnimationFrame(function() {
-          rafId = null;
-          if (dx < 0) {
-            var clamped = Math.max(dx, -MAX_FOLLOW);
-            inner.style.transform = 'translateX(' + clamped + 'px)';
-            // Red hint: fade in proportionally (0-80px → opacity 0-1)
-            if (hint) hint.style.opacity = Math.min(Math.abs(dx) / 60, 1).toFixed(2);
-          }
-        });
+        // 直接写入 transform（不用 rAF —— 移动端触摸序列期间 rAF 被节流不会触发）
+        if (dx < 0) {
+          var clamped = Math.max(dx, -MAX_FOLLOW);
+          inner.style.transform = 'translateX(' + clamped + 'px)';
+          if (hint) hint.style.opacity = Math.min(Math.abs(dx) / 60, 1).toFixed(2);
+        }
       };
 
       inner.ontouchend = function(e) {
         if (_flyingCard) return;
-        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
 
         var dx = currentX - startX;
 
@@ -1389,6 +1656,8 @@ function bindSwipeEvents() {
           inner.style.pointerEvents = 'none';
           if (hint) hint.style.opacity = '0';
           inner.classList.add('flying');
+          // 让飞行不被容器 overflow:hidden 截断
+          container.style.overflow = 'visible';
           inner.dataset.swiping = '';
           _flyingCard = inner;
 
@@ -1396,8 +1665,9 @@ function bindSwipeEvents() {
             deleteTaskAfterFly(inner.dataset.taskId, container);
           }, 230);
         } else {
-          // REBOUND
+          // REBOUND — 先清除 touchstart 设置的 inline transition:none，让 .rebounding 的 CSS transition 生效
           if (hint) hint.style.opacity = '0';
+          inner.style.transition = '';
           inner.classList.add('rebounding');
           inner.dataset.swiping = '';
           setTimeout(function() {
@@ -1409,7 +1679,6 @@ function bindSwipeEvents() {
 
       inner.ontouchcancel = function() {
         if (_flyingCard) return;
-        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
         direction = null;
         inner.style.transition = 'transform 200ms cubic-bezier(0.25, 1, 0.5, 1)';
         inner.style.transform = 'translateX(0)';
@@ -1440,7 +1709,8 @@ function triggerCelebration() {
 function openAddModal() {
   document.getElementById('add-modal').classList.add('open');
   document.getElementById('task-input').value = '';
-  setTimeout(() => document.getElementById('task-input').focus(), 400);
+  // 动画结束后聚焦输入框（250ms 动画 + 50ms buffer）
+  setTimeout(() => document.getElementById('task-input').focus(), 300);
 }
 
 function closeAddModal() {
@@ -2072,9 +2342,37 @@ function setTodayDate() {
 }
 
 /* ========================================
-   KEYBOARD HANDLER
+   KEYBOARD-AWARE BOTTOM UI (visualViewport)
+   — 仅适配底部导航栏，弹窗定位不受键盘影响
 ======================================== */
-document.addEventListener('keydown', e => {
+(function() {
+  if (!window.visualViewport) return;
+
+  var prevKb = 0;
+
+  function update() {
+    var vv = window.visualViewport;
+    // keyboard height = layout viewport minus visible area (minus status-bar offset in PWA)
+    var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    if (kb === prevKb) return;
+    prevKb = kb;
+    if (kb > 0) {
+      document.documentElement.style.setProperty('--keyboard-height', kb + 'px');
+    } else {
+      document.documentElement.style.removeProperty('--keyboard-height');
+    }
+  }
+
+  visualViewport.addEventListener('resize', update);
+  visualViewport.addEventListener('scroll', update);
+  update();
+})();
+
+
+/* ========================================
+   KEYBOARD SHORTCUTS (Enter / Escape)
+======================================== */
+document.addEventListener('keydown', function(e) {
   if (e.key === 'Enter' && document.getElementById('add-modal').classList.contains('open')) addTask();
   if (e.key === 'Escape') {
     document.getElementById('add-modal').classList.remove('open');
@@ -2099,16 +2397,110 @@ if (lastDate && lastDate !== todayStr) {
 localStorage.setItem('serene_last_date', todayStr);
 </script>
 <script>
-// PWA — Service Worker 注册
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js').then(function (reg) {
+/* ========================================
+   PWA — Service Worker 注册 & 版本更新
+======================================== */
+(function() {
+  if (!('serviceWorker' in navigator)) return;
+
+  // SW 注册句柄，供 manualCheckUpdate 使用
+  var _swReg = null;
+  // 等待激活的 SW（waiting state）
+  var _waitingSW = null;
+
+  /* 展示/关闭 更新弹窗 */
+  function showUpdateModal() {
+    var overlay = document.getElementById('sw-update-overlay');
+    if (overlay) overlay.classList.add('open');
+  }
+  window.dismissUpdate = function() {
+    var overlay = document.getElementById('sw-update-overlay');
+    if (overlay) overlay.classList.remove('open');
+    _waitingSW = null;  // 本次会话放弃
+  };
+  window.applyUpdate = function() {
+    if (!_waitingSW) {
+      showToast('没有等待中的更新');
+      return;
+    }
+    // 通知 waiting SW 激活
+    _waitingSW.postMessage({ type: 'SKIP_WAITING' });
+    // 关闭弹窗，等 SW_ACTIVATED 消息后刷新
+    var overlay = document.getElementById('sw-update-overlay');
+    if (overlay) overlay.classList.remove('open');
+  };
+
+  /* 手动检查更新 */
+  window.manualCheckUpdate = function() {
+    var btn = document.getElementById('btn-check-update');
+    if (!_swReg) {
+      showToast('当前已是最新版本');
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '检查中...';
+    }
+    _swReg.update().then(function() {
+      setTimeout(function() {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '检查版本更新';
+        }
+        if (_waitingSW) {
+          showUpdateModal();
+        } else {
+          showToast('当前已是最新版本');
+        }
+      }, 1200);
+    }).catch(function() {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '检查版本更新';
+      }
+      showToast('检查更新失败，请确认网络连接');
+    });
+  };
+
+  /* 监听 waiting SW */
+  function trackWaiting(reg) {
+    if (reg.waiting) {
+      _waitingSW = reg.waiting;
+      showUpdateModal();
+    }
+    // 监听新 SW 进入 installing 状态
+    reg.addEventListener('updatefound', function() {
+      var newSW = reg.installing;
+      newSW.addEventListener('statechange', function() {
+        if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+          // 有旧 SW 控制，新 SW 在等待
+          _waitingSW = newSW;
+          showUpdateModal();
+        }
+      });
+    });
+  }
+
+  /* 监听 SW 激活后的页面刷新 */
+  var refreshing = false;
+  navigator.serviceWorker.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'SW_ACTIVATED' && !refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
+
+  /* 注册 SW */
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./sw.js').then(function(reg) {
       console.log('[PWA] Service Worker 注册成功:', reg.scope);
-    }).catch(function (err) {
-      console.log('[PWA] Service Worker 注册失败:', err);
+      _swReg = reg;
+      trackWaiting(reg);
+    }).catch(function(err) {
+      console.warn('[PWA] Service Worker 注册失败:', err);
     });
   });
-}
+})();
 </script>
 </body>
 </html>
