@@ -507,6 +507,114 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
   }
 }
 .modal-title { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 20px; text-align: center; }
+
+/* ===== ONBOARD OVERLAY ===== */
+.onboard-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(4px);
+  z-index: 250;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: calc(15vh + env(safe-area-inset-top, 0px));
+}
+.onboard-overlay.open {
+  display: flex;
+}
+.onboard-card {
+  width: calc(100% - 32px);
+  max-width: 398px;
+  margin: 0 16px;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px 24px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+  opacity: 0;
+  transform: translateY(20px);
+  animation: onboardIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  max-height: calc(80vh - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@keyframes onboardIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+.onboard-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gray-900);
+  text-align: center;
+  margin-bottom: 4px;
+}
+.onboard-subtitle {
+  font-size: 13px;
+  color: var(--gray-400);
+  text-align: center;
+  margin-bottom: 24px;
+}
+.onboard-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.onboard-item:last-child { border-bottom: none; }
+.onboard-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: var(--green-pale);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.onboard-text strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin-bottom: 2px;
+}
+.onboard-text span {
+  font-size: 13px;
+  color: var(--gray-500);
+  line-height: 1.5;
+}
+.onboard-btn {
+  width: 100%;
+  padding: 14px;
+  background: var(--green-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  margin-top: 20px;
+  transition: transform 100ms, box-shadow 100ms;
+  -webkit-tap-highlight-color: transparent;
+}
+.onboard-btn:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgba(34,197,94,0.3);
+}
+
+/* 小屏设备适配 */
+@media (max-height: 699px) {
+  .onboard-overlay { padding-top: calc(8vh + env(safe-area-inset-top, 0px)); }
+  .onboard-card { max-height: 75vh; padding: 22px 20px 20px; }
+  .onboard-item { padding: 10px 0; }
+}
+
+/* 横屏适配 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .onboard-overlay { padding-top: 0; align-items: center; }
+  .onboard-card { max-height: 85vh; }
+}
 .form-group { margin-bottom: 16px; }
 .form-label { font-size: 13px; font-weight: 600; color: var(--gray-600); margin-bottom: 6px; display: block; }
 .form-input {
@@ -1259,6 +1367,39 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
     </div>
   </div>
 
+  <!-- ====== ONBOARD OVERLAY ====== -->
+  <div class="onboard-overlay" id="onboard-overlay" onclick="if(event.target===this)closeOnboard()">
+    <div class="onboard-card">
+      <div class="onboard-title">今日事今日毕</div>
+      <div class="onboard-subtitle">简单几步，轻松管理今日任务</div>
+      <div class="onboard-item">
+        <div class="onboard-icon">✏️</div>
+        <div class="onboard-text"><strong>添加任务</strong><span>点击首页"添加任务"按钮，输入内容，选择工作/生活分类和紧急/日常优先级</span></div>
+      </div>
+      <div class="onboard-item">
+        <div class="onboard-icon">✅</div>
+        <div class="onboard-text"><strong>完成任务</strong><span>点击任务卡片即可标记完成</span></div>
+      </div>
+      <div class="onboard-item">
+        <div class="onboard-icon">👈</div>
+        <div class="onboard-text"><strong>滑动删除</strong><span>任务卡片向左滑动，松手后飞出删除</span></div>
+      </div>
+      <div class="onboard-item">
+        <div class="onboard-icon">📅</div>
+        <div class="onboard-text"><strong>打卡记录</strong><span>底部切换到记录页，查看历史每天的完成情况</span></div>
+      </div>
+      <div class="onboard-item">
+        <div class="onboard-icon">📊</div>
+        <div class="onboard-text"><strong>数据统计</strong><span>底部切换到统计页，查看完成率、紧急/日常分布、周/月趋势图</span></div>
+      </div>
+      <div class="onboard-item">
+        <div class="onboard-icon">💾</div>
+        <div class="onboard-text"><strong>数据备份</strong><span>统计页支持导出备份文件和导入恢复，换设备不丢失</span></div>
+      </div>
+      <button class="onboard-btn" onclick="closeOnboard()">知道了</button>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 </div>
@@ -1494,6 +1635,9 @@ function renderHome() {
 
   // Update history for today
   updateTodayHistory();
+
+  // Show onboarding if never seen
+  if (!localStorage.getItem('serene_onboarded')) openOnboard();
 }
 
 function updateRingDisplay(pct, done, total) {
@@ -1751,6 +1895,18 @@ function addTask() {
   closeAddModal();
   renderHome();
   showToast('任务已添加 👍');
+}
+
+/* ========================================
+   ONBOARDING
+======================================== */
+function openOnboard() {
+  document.getElementById('onboard-overlay').classList.add('open');
+}
+
+function closeOnboard() {
+  document.getElementById('onboard-overlay').classList.remove('open');
+  localStorage.setItem('serene_onboarded', '1');
 }
 
 /* ========================================
