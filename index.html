@@ -513,14 +513,18 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.3);
   backdrop-filter: blur(4px);
-  z-index: 250;
-  display: none;
+  z-index: 600;
+  display: flex;
   align-items: flex-start;
   justify-content: center;
   padding-top: calc(15vh + env(safe-area-inset-top, 0px));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .onboard-overlay.open {
-  display: flex;
+  opacity: 1;
+  pointer-events: all;
 }
 .onboard-card {
   width: calc(100% - 32px);
@@ -532,13 +536,15 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
   box-shadow: 0 8px 40px rgba(0,0,0,0.12);
   opacity: 0;
   transform: translateY(20px);
-  animation: onboardIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: opacity 250ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
   max-height: calc(80vh - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
-@keyframes onboardIn {
-  to { opacity: 1; transform: translateY(0); }
+.onboard-overlay.open .onboard-card {
+  opacity: 1;
+  transform: translateY(0);
 }
 .onboard-title {
   font-size: 18px;
@@ -944,6 +950,29 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
   pointer-events: none;
 }
 
+.stats-install-btn {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--green-primary);
+  background: var(--green-bg);
+  border: 1.5px solid var(--green-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  margin-top: 8px;
+}
+.stats-install-btn:hover { border-color: var(--green-primary); }
+.stats-install-btn:active {
+  transform: scale(0.97);
+  border-color: var(--green-primary);
+  color: var(--green-primary);
+}
+.stats-install-btn[hidden] { display: none; }
+
 /* SW Update overlay */
 .sw-update-overlay {
   position: fixed;
@@ -1174,6 +1203,9 @@ button:active, .filter-tab:active, .category-btn:active, .priority-btn:active,
 
       <!-- Check update button -->
       <button class="stats-update-btn" id="btn-check-update" onclick="manualCheckUpdate()">检查版本更新</button>
+
+      <!-- Install PWA button (hidden in standalone or unsupported) -->
+      <button class="stats-install-btn" id="btn-install" onclick="installApp()" hidden>安装到桌面</button>
 
       <!-- Mini stats row -->
       <div class="stats-row">
@@ -1474,44 +1506,124 @@ let state = {
 };
 
 function loadState() {
-  // 读取数据版本号
-  const savedVer = localStorage.getItem(DATA_VER_KEY) || null;
+  // === 诊断日志：初始化入口 ===
+  console.log('[loadState] 开始初始化，存储键:', STORAGE_KEY, '数据版本:', APP_DATA_VERSION);
 
+  // === localStorage 可用性检测 ===
+  let storageAvailable = true;
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      state = JSON.parse(saved);
+    const testKey = '__serene_test__';
+    localStorage.setItem(testKey, '1');
+    localStorage.removeItem(testKey);
+    console.log('[loadState] localStorage 可用');
+  } catch (e) {
+    console.warn('[loadState] localStorage 不可用（无痕/隐私模式或已禁用），数据仅在当前会话保留');
+    storageAvailable = false;
+    showToast('浏览器存储不可用，数据仅在当前会话保留');
+  }
+
+  // 读取数据版本号
+  const savedVer = storageAvailable ? (localStorage.getItem(DATA_VER_KEY) || null) : null;
+  console.log('[loadState] 已有版本号:', savedVer || '(无)');
+
+  // === 读取主存储数据 ===
+  if (storageAvailable) {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        console.log('[loadState] 原始存储长度:', saved.length, '字符');
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          state = parsed;
+          console.log('[loadState] 解析成功，任务天数:', Object.keys(state.tasks || {}).length,
+                      '历史天数:', Object.keys(state.history || {}).length);
+        } else {
+          console.warn('[loadState] 解析结果非法（非对象），保留原始存储，使用空默认。原始值类型:', typeof parsed);
+        }
+      } else {
+        console.log('[loadState] 存储为空，使用默认空状态');
+      }
+    } catch (e) {
+      // 关键兜底：JSON 解析失败时绝不覆盖 localStorage 原始数据
+      console.error('[loadState] JSON 解析失败，保留原始存储数据不覆盖。异常:', e.message);
+      // state 保持默认空对象，原始 localStorage 数据原封不动
+      showToast('数据读取异常，已保留原始数据');
     }
-  } catch(e) {
-    console.error('[loadState] 数据解析失败，初始化默认数据');
-    state = { tasks: {}, history: {} };
   }
 
   // 确保基础字段存在（兜底防崩溃）
   if (!state.tasks)   state.tasks   = {};
   if (!state.history) state.history = {};
 
-  // 新用户：写入默认版本号，不执行迁移
+  // === 新用户：写入默认版本号 ===
   if (!savedVer) {
-    localStorage.setItem(DATA_VER_KEY, APP_DATA_VERSION);
-    // Seed demo data if first visit
-    if (Object.keys(state.tasks).length === 0) seedDemoData();
+    if (storageAvailable) {
+      localStorage.setItem(DATA_VER_KEY, APP_DATA_VERSION);
+      console.log('[loadState] 新用户，写入版本号:', APP_DATA_VERSION);
+    }
+    // 仅当完全没有历史数据时才填充示例
+    if (Object.keys(state.tasks).length === 0 && Object.keys(state.history).length === 0) {
+      console.log('[loadState] 首次使用，填充示例数据');
+      seedDemoData();
+    }
     return;
   }
 
-  // 旧版本用户：执行增量数据迁移
+  // === 旧版本用户：执行增量数据迁移 ===
   if (versionLt(savedVer, APP_DATA_VERSION)) {
+    console.log('[loadState] 检测版本升级:', savedVer, '→', APP_DATA_VERSION);
     migrateData(savedVer);
-    localStorage.setItem(DATA_VER_KEY, APP_DATA_VERSION);
-    console.log(`[DataMigration] ${savedVer} → ${APP_DATA_VERSION}`);
-  } else {
-    // 版本一致，无需迁移
-    if (Object.keys(state.tasks).length === 0) seedDemoData();
+    if (storageAvailable) {
+      localStorage.setItem(DATA_VER_KEY, APP_DATA_VERSION);
+    }
+    console.log('[loadState] 迁移完成');
+    return;
   }
+
+  // 版本一致，无需迁移。注意：不再对已使用过的用户自动填充示例数据，
+  // 避免因意外状态导致 seedDemoData 覆盖真实数据。
+  console.log('[loadState] 版本一致，初始化完成');
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  // === 数据完整性校验 ===
+  if (!state || typeof state !== 'object') {
+    console.error('[saveState] 拒绝写入：state 非法');
+    showToast('数据异常，保存失败');
+    return false;
+  }
+  if (state.tasks === undefined || state.tasks === null) state.tasks = {};
+  if (state.history === undefined || state.history === null) state.history = {};
+
+  // === localStorage 可用性检测（每次写入前校验） ===
+  let quotaOk = true;
+  try {
+    const testKey = '__serene_test__';
+    localStorage.setItem(testKey, '1');
+    localStorage.removeItem(testKey);
+  } catch (e) {
+    console.error('[saveState] localStorage 不可用:', e.message);
+    showToast('本地存储不可用，数据将在关闭后丢失');
+    return false;
+  }
+
+  // === 序列化并写入 ===
+  try {
+    const json = JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY, json);
+    console.log('[saveState] 持久化成功，大小:', json.length, '字节',
+                '任务天数:', Object.keys(state.tasks).length,
+                '历史天数:', Object.keys(state.history).length);
+    return true;
+  } catch (e) {
+    console.error('[saveState] 写入失败:', e.message, '错误类型:', e.name);
+    if (e.name === 'QuotaExceededError' || (e.message && e.message.includes('quota'))) {
+      showToast('本地存储空间不足，请清理部分数据');
+    } else {
+      showToast('数据保存失败，请重试');
+    }
+    return false;
+  }
 }
 
 function getTodayKey() {
@@ -1637,7 +1749,7 @@ function renderHome() {
   updateTodayHistory();
 
   // Show onboarding if never seen
-  if (!localStorage.getItem('serene_onboarded')) openOnboard();
+  if (!localStorage.getItem('first_visit_guide_shown')) openOnboard();
 }
 
 function updateRingDisplay(pct, done, total) {
@@ -1906,7 +2018,7 @@ function openOnboard() {
 
 function closeOnboard() {
   document.getElementById('onboard-overlay').classList.remove('open');
-  localStorage.setItem('serene_onboarded', '1');
+  localStorage.setItem('first_visit_guide_shown', '1');
 }
 
 /* ========================================
@@ -2284,12 +2396,20 @@ function closeClearConfirm() {
   document.getElementById('clear-confirm-overlay').style.display = 'none';
 }
 function clearAllRecords() {
-  // Clear the actual storage keys used by the app
-  localStorage.removeItem('serene_logic_v2');
-  localStorage.removeItem('serene_last_date');
-  // Reset in-memory state
+  // 清除所有 serene_ 开头的存储键（包括数据版本号、最后日期等）
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('serene_')) {
+      keysToRemove.push(key);
+    }
+  }
+  // 同步重置首次引导标记
+  keysToRemove.push('first_visit_guide_shown');
+  keysToRemove.forEach(function(key) { localStorage.removeItem(key); });
+  console.log('[clearAllRecords] 已清除', keysToRemove.length, '个存储键:', keysToRemove.join(', '));
+  // 重置内存状态
   state = { tasks: {}, history: {} };
-  tasks = [];
   closeClearConfirm();
   renderHome();
   renderLog();
@@ -2533,6 +2653,7 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     document.getElementById('add-modal').classList.remove('open');
     document.getElementById('day-modal').classList.remove('open');
+    if (document.getElementById('onboard-overlay').classList.contains('open')) closeOnboard();
   }
 });
 
@@ -2551,6 +2672,54 @@ if (lastDate && lastDate !== todayStr) {
   showToast('新的一天，新的开始 🌱');
 }
 localStorage.setItem('serene_last_date', todayStr);
+</script>
+<script>
+/* ========================================
+   PWA — 安装到桌面 (beforeinstallprompt)
+   全局单次监听，阻止原生自动弹窗，仅通过按钮手动触发
+======================================== */
+(function() {
+  var _deferredPrompt = null;
+
+  // 检测是否已处于独立应用模式或明确不支持安装
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  if (isStandalone || !('BeforeInstallPromptEvent' in window)) {
+    console.log('[PWA-Install] 当前不适用安装功能（standalone='+isStandalone+'）');
+    return;
+  }
+
+  var installBtn = document.getElementById('btn-install');
+
+  // 全局唯一 beforeinstallprompt 监听
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    _deferredPrompt = e;
+    console.log('[PWA-Install] beforeinstallprompt 已捕获，安装按钮就绪');
+    if (installBtn) installBtn.hidden = false;
+  });
+
+  // 安装成功/取消后清理
+  window.addEventListener('appinstalled', function() {
+    console.log('[PWA-Install] 安装完成');
+    _deferredPrompt = null;
+    if (installBtn) installBtn.hidden = true;
+    showToast('已添加到桌面');
+  });
+
+  // 手动触发安装
+  window.installApp = function() {
+    if (!_deferredPrompt) {
+      showToast('安装暂不可用，请稍后再试');
+      return;
+    }
+    _deferredPrompt.prompt();
+    _deferredPrompt.userChoice.then(function(result) {
+      console.log('[PWA-Install] 用户选择:', result.outcome);
+      _deferredPrompt = null;
+      if (installBtn) installBtn.hidden = true;
+    });
+  };
+})();
 </script>
 <script>
 /* ========================================
